@@ -688,11 +688,59 @@ def subsection_title(
     )
 
 
+
+def white_header_row(
+    rows: list,
+) -> list:
+
+    if not rows:
+        return rows
+
+    header_row = []
+
+    for cell in rows[0]:
+
+        if isinstance(
+            cell,
+            Paragraph,
+        ):
+
+            header_style = ParagraphStyle(
+                f"{cell.style.name}WhiteHeader",
+                parent=cell.style,
+                textColor=WHITE,
+            )
+
+            header_row.append(
+                Paragraph(
+                    cell.text,
+                    header_style,
+                )
+            )
+
+        else:
+
+            header_row.append(
+                cell
+            )
+
+    return [
+        header_row,
+        *rows[1:],
+    ]
+
+
 def simple_table(
     rows: list,
     widths: list,
     header: bool = False,
 ):
+
+    if header:
+
+        rows = white_header_row(
+            rows
+        )
 
     table = Table(
         rows,
@@ -2070,6 +2118,11 @@ def add_evidence_inventory(
         )
 
 
+    rows = white_header_row(
+        rows
+    )
+
+
     table = LongTable(
         rows,
         colWidths=[
@@ -3361,6 +3414,11 @@ def add_correlations(
             )
 
 
+        rows = white_header_row(
+            rows
+        )
+
+
         table = LongTable(
             rows,
             colWidths=[
@@ -4088,6 +4146,11 @@ def add_timeline(
             )
 
 
+        rows = white_header_row(
+            rows
+        )
+
+
         table = LongTable(
             rows,
             colWidths=[
@@ -4361,6 +4424,11 @@ def add_chain_of_custody(
                     ),
                 ]
             )
+
+
+        rows = white_header_row(
+            rows
+        )
 
 
         table = LongTable(
