@@ -1,0 +1,238 @@
+.loadingScreen {
+  position: fixed;
+  inset: 0;
+
+  z-index: 9999;
+
+  display: grid;
+  place-items: center;
+
+  min-height: 100vh;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(26, 123, 180, 0.07),
+      transparent 32%
+    ),
+    #050a0f;
+
+  color: #edf6fc;
+}
+
+
+.loader {
+  width: min(320px, calc(100vw - 48px));
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  text-align: center;
+}
+
+
+.logoWrap {
+  position: relative;
+
+  width: 58px;
+  height: 58px;
+
+  display: grid;
+  place-items: center;
+}
+
+
+.logo {
+  position: relative;
+  z-index: 2;
+
+  width: 52px;
+  height: 52px;
+
+  object-fit: contain;
+
+  animation:
+    logoEntrance 500ms ease both,
+    logoBreath 1800ms ease-in-out 500ms infinite;
+}
+
+
+.logoGlow {
+  position: absolute;
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 50%;
+
+  background:
+    rgba(59, 184, 247, 0.15);
+
+  filter: blur(18px);
+
+  animation:
+    glowBreath 1800ms ease-in-out infinite;
+}
+
+
+.copy {
+  margin-top: 19px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+}
+
+
+.copy strong {
+  font-size: 15px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.22em;
+
+  color: #eef8ff;
+}
+
+
+.copy span {
+  margin-top: 8px;
+
+  color: #718b9d;
+
+  font-size: 11px;
+
+  letter-spacing: 0.025em;
+}
+
+
+.progress {
+  position: relative;
+
+  width: 210px;
+  height: 1px;
+
+  margin-top: 25px;
+
+  overflow: hidden;
+
+  background:
+    rgba(132, 184, 215, 0.14);
+}
+
+
+.progress span {
+  position: absolute;
+
+  top: 0;
+  left: -42%;
+
+  width: 42%;
+  height: 100%;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      #56c7ff,
+      transparent
+    );
+
+  animation:
+    progressMove 1100ms ease-in-out infinite;
+}
+
+
+.status {
+  margin-top: 13px;
+
+  color: #526f82;
+
+  font-size: 7px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.2em;
+}
+
+
+/* =====================================================
+   ANIMATION
+===================================================== */
+
+
+@keyframes logoEntrance {
+
+  from {
+    opacity: 0;
+    transform:
+      translateY(5px)
+      scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
+
+}
+
+
+@keyframes logoBreath {
+
+  0%,
+  100% {
+    opacity: 0.86;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+
+}
+
+
+@keyframes glowBreath {
+
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+
+}
+
+
+@keyframes progressMove {
+
+  0% {
+    left: -42%;
+  }
+
+  100% {
+    left: 100%;
+  }
+
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+  .logo,
+  .logoGlow,
+  .progress span {
+    animation: none;
+  }
+
+}

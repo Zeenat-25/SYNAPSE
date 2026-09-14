@@ -1,0 +1,128 @@
+# =========================================================
+# SYNAPSE
+# =========================================================
+
+
+# ---------------------------------------------------------
+# SECRETS / ENVIRONMENT VARIABLES
+# ---------------------------------------------------------
+
+.env
+.env.*
+!.env.example
+
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+frontend/.env.local
+frontend/.env.production
+
+
+# ---------------------------------------------------------
+# PYTHON
+# ---------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+.venv/
+venv/
+env/
+
+backend/.venv/
+backend/venv/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+# ---------------------------------------------------------
+# NEXT.JS / NODE
+# ---------------------------------------------------------
+
+node_modules/
+frontend/node_modules/
+
+.next/
+frontend/.next/
+
+out/
+frontend/out/
+
+.vercel/
+frontend/.vercel/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# ---------------------------------------------------------
+# LOCAL DATABASE
+# ---------------------------------------------------------
+
+*.db
+*.sqlite
+*.sqlite3
+
+backend/data/
+
+
+# ---------------------------------------------------------
+# FORENSIC EVIDENCE / UPLOADS
+# ---------------------------------------------------------
+
+backend/uploads/
+backend/evidence/
+backend/storage/
+
+uploads/
+evidence/
+
+test-files/
+
+
+# ---------------------------------------------------------
+# ML TRAINING DATASETS
+# Keep the trained .joblib model
+# ---------------------------------------------------------
+
+backend/ml/data/
+backend/ml/imports/
+
+*.csv
+
+
+# ---------------------------------------------------------
+# GENERATED REPORTS
+# ---------------------------------------------------------
+
+backend/reports/
+backend/generated_reports/
+
+
+# ---------------------------------------------------------
+# TEMP / LOG FILES
+# ---------------------------------------------------------
+
+*.log
+*.tmp
+*.temp
+~$*
+
+
+# ---------------------------------------------------------
+# WINDOWS / EDITORS
+# ---------------------------------------------------------
+
+Thumbs.db
+desktop.ini
+.DS_Store
+
+.vscode/
+.idea/
