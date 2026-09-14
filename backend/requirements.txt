@@ -4,3 +4,6 @@ scikit-learn
 joblib
 pefile
 pandas
+google-genai
+python-dotenv
+reportlab
