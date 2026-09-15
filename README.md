@@ -191,59 +191,6 @@ SYNAPSE/
 └── README.md
 ```
 
-## Local setup
-
-Install Python, Node.js with npm, and Git. Use the versions required by the repository’s dependency manifests.
-
-### 1. Get the source
-
-```powershell
-git clone https://github.com/Zeenat-25/SYNAPSE.git
-cd SYNAPSE
-```
-
-### 2. Configure the AI assistant
-
-Create `backend/.env` locally:
-
-```dotenv
-GEMINI_API_KEY=
-GEMINI_MODEL=
-```
-
-Set your own Gemini API key and an available model identifier supported by your configuration. Keep `.env` and credentials out of version control.
-
-### 3. Start the backend
-
-From the repository root, in PowerShell:
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m fastapi dev app/main.py
-```
-
-If PowerShell blocks activation, use the environment’s interpreter directly:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m fastapi dev app/main.py
-```
-
-### 4. Start the frontend
-
-In a second terminal, from the repository root:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Open the local URL printed by Next.js. Use the backend URL printed by FastAPI for local API access. Check the frontend’s API configuration points to that local backend before testing; use any environment example provided by the repository.
-
 ## Live deployment
 
 | Service | Address |
