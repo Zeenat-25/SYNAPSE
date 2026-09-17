@@ -18,9 +18,6 @@ from ..artifact_triage import (
     triage_artifact,
 )
 
-from ..case_reasoning import (
-    build_case_reasoning,
-)
 
 from ..database import (
     get_session,
@@ -613,33 +610,6 @@ def get_case_triage(
 
     return results
 
-
-# =========================================================
-# CASE-LEVEL FORENSIC REASONING
-# =========================================================
-
-
-@router.get(
-    "/cases/{case_id}/reasoning",
-)
-def get_case_reasoning(
-    case_id: int,
-    session: SessionDep,
-):
-
-    try:
-
-        return build_case_reasoning(
-            session=session,
-            case_id=case_id,
-        )
-
-    except ValueError as error:
-
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        )
 
 
 # =========================================================
