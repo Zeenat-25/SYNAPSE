@@ -11,3 +11,4 @@ reportlab
 pypdf
 Pillow
 pytesseract
+supabase==2.31.0

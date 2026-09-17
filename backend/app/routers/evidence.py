@@ -24,6 +24,9 @@ from ..database import (
 
 from ..evidence_storage import (
     get_case_evidence_directory,
+    is_supabase_reference,
+    materialize_evidence_file,
+    persist_evidence_file,
 )
 
 from ..feature_extraction import (
@@ -262,6 +265,37 @@ async def upload_evidence(
         destination
     )
 
+    mime_type = (
+        file.content_type
+        or "application/octet-stream"
+    )
+
+    try:
+
+        durable_stored_path = (
+            persist_evidence_file(
+                local_path=destination,
+                case_id=case_id,
+                stored_filename=(
+                    stored_filename
+                ),
+                content_type=mime_type,
+            )
+        )
+
+    except Exception as error:
+
+        if destination.exists():
+            destination.unlink()
+
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Evidence could not be "
+                "saved to durable storage."
+            ),
+        ) from error
+
     evidence = Evidence(
 
         evidence_code=(
@@ -280,16 +314,13 @@ async def upload_evidence(
             stored_filename
         ),
 
-        stored_path=str(
-            destination.resolve()
+        stored_path=(
+            durable_stored_path
         ),
 
         file_extension=extension,
 
-        mime_type=(
-            file.content_type
-            or "application/octet-stream"
-        ),
+        mime_type=mime_type,
 
         file_size=total_size,
 
@@ -392,6 +423,16 @@ async def upload_evidence(
         ),
     )
 
+    # Supabase now owns the durable copy.
+    # Remove only the temporary Render copy.
+    if (
+        is_supabase_reference(
+            durable_stored_path
+        )
+        and destination.exists()
+    ):
+        destination.unlink()
+
     return evidence
 
 
@@ -477,11 +518,22 @@ def verify_evidence_integrity(
         )
     )
 
-    file_path = Path(
-        evidence.stored_path
-    )
+    try:
 
-    if not file_path.exists():
+        file_path = (
+            materialize_evidence_file(
+                stored_path=(
+                    evidence.stored_path
+                ),
+                case_id=case_id,
+                stored_filename=(
+                    evidence.stored_filename
+                ),
+                force_refresh=True,
+            )
+        )
+
+    except FileNotFoundError:
 
         evidence.integrity_status = (
             "MISSING"
@@ -514,6 +566,16 @@ def verify_evidence_integrity(
         )
 
         return evidence
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Evidence storage is "
+                "temporarily unavailable."
+            ),
+        ) from error
 
     current_hashes = (
         calculate_hashes(

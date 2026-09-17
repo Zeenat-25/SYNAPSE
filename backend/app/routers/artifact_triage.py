@@ -1,6 +1,5 @@
 import json
 
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
@@ -21,6 +20,10 @@ from ..artifact_triage import (
 
 from ..database import (
     get_session,
+)
+
+from ..evidence_storage import (
+    materialize_evidence_file,
 )
 
 from ..ledger import (
@@ -251,12 +254,19 @@ def analyze_evidence(
         )
 
 
-    path = Path(
-        evidence.stored_path
-    )
-
-
     try:
+
+        path = (
+            materialize_evidence_file(
+                stored_path=(
+                    evidence.stored_path
+                ),
+                case_id=case_id,
+                stored_filename=(
+                    evidence.stored_filename
+                ),
+            )
+        )
 
         result = triage_artifact(
             path=path,

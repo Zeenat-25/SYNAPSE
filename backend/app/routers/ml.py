@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
@@ -14,6 +13,10 @@ from sqlmodel import (
 
 from ..database import (
     get_session,
+)
+
+from ..evidence_storage import (
+    materialize_evidence_file,
 )
 
 from ..ledger import (
@@ -209,12 +212,19 @@ def predict_evidence(
         )
 
 
-    file_path = Path(
-        evidence.stored_path
-    )
-
-
     try:
+
+        file_path = (
+            materialize_evidence_file(
+                stored_path=(
+                    evidence.stored_path
+                ),
+                case_id=case_id,
+                stored_filename=(
+                    evidence.stored_filename
+                ),
+            )
+        )
 
         result = predict_pe_file(
             file_path=file_path,
@@ -543,23 +553,19 @@ def explain_prediction(
         )
 
 
-    file_path = Path(
-        evidence.stored_path
-    )
-
-
-    if not file_path.exists():
-
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Stored evidence file "
-                "does not exist."
-            ),
-        )
-
-
     try:
+
+        file_path = (
+            materialize_evidence_file(
+                stored_path=(
+                    evidence.stored_path
+                ),
+                case_id=case_id,
+                stored_filename=(
+                    evidence.stored_filename
+                ),
+            )
+        )
 
         explanation = (
             explain_pe_prediction(
