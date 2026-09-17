@@ -7,3 +7,6 @@ pandas
 google-genai
 python-dotenv
 reportlab
+pypdf
+Pillow
+pytesseract
