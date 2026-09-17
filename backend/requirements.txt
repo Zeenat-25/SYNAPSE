@@ -1,5 +1,6 @@
 fastapi[standard]
 sqlmodel
+psycopg[binary]
 scikit-learn
 joblib
 pefile
