@@ -331,6 +331,284 @@ def paragraph_text(
     )
 
 
+def humanize_indicator_type(
+    value: Any,
+) -> str:
+
+    normalized = (
+        safe_text(
+            value,
+            "",
+        )
+        .strip()
+        .upper()
+    )
+
+    labels = {
+        "AMOUNT_INR": "Transaction Amounts",
+        "BANK_ACCOUNT_LAST4": "Bank Accounts Referenced",
+        "INVOICE_ID": "Invoices Found",
+        "EMAIL": "Email Addresses",
+        "EMAIL_ADDRESS": "Email Addresses",
+        "IP": "IP Addresses",
+        "IP_ADDRESS": "IP Addresses",
+        "DOMAIN": "Domains",
+        "URL": "URLs",
+        "FILE": "Files Referenced",
+        "FILENAME": "Files Referenced",
+        "USER": "Users Referenced",
+        "USERNAME": "Users Referenced",
+        "PHONE": "Phone Numbers",
+        "PHONE_NUMBER": "Phone Numbers",
+        "DATE": "Dates",
+        "TIMESTAMP": "Timestamps",
+        "SHA256": "SHA-256 Hashes",
+        "SHA1": "SHA-1 Hashes",
+        "MD5": "MD5 Hashes",
+    }
+
+    if normalized in labels:
+
+        return labels[
+            normalized
+        ]
+
+    if not normalized:
+
+        return "Other Extracted Evidence"
+
+    return " ".join(
+        part.capitalize()
+        for part in normalized.split(
+            "_"
+        )
+        if part
+    )
+
+
+def format_indian_number(
+    value: float,
+) -> str:
+
+    negative = value < 0
+
+    absolute = abs(
+        value
+    )
+
+    rounded = round(
+        absolute,
+        2,
+    )
+
+    whole = int(
+        rounded
+    )
+
+    decimal = (
+        f"{rounded:.2f}"
+        .split(
+            ".",
+            1,
+        )[1]
+        .rstrip(
+            "0"
+        )
+    )
+
+    digits = str(
+        whole
+    )
+
+    if len(
+        digits
+    ) <= 3:
+
+        grouped = digits
+
+    else:
+
+        last_three = digits[
+            -3:
+        ]
+
+        remaining = digits[
+            :-3
+        ]
+
+        pairs = []
+
+        while remaining:
+
+            pairs.insert(
+                0,
+                remaining[
+                    -2:
+                ],
+            )
+
+            remaining = remaining[
+                :-2
+            ]
+
+        grouped = (
+            ",".join(
+                pairs
+            )
+            +
+            ","
+            +
+            last_three
+        )
+
+    if decimal:
+
+        grouped += (
+            "."
+            +
+            decimal
+        )
+
+    if negative:
+
+        grouped = (
+            "-"
+            +
+            grouped
+        )
+
+    return grouped
+
+
+def format_indicator_value(
+    indicator: dict,
+) -> str:
+
+    indicator_type = (
+        safe_text(
+            indicator.get(
+                "type"
+            ),
+            "",
+        )
+        .strip()
+        .upper()
+    )
+
+    value = safe_text(
+        indicator.get(
+            "value"
+        )
+    )
+
+    if indicator_type == "AMOUNT_INR":
+
+        try:
+
+            numeric = float(
+                value.replace(
+                    ",",
+                    "",
+                )
+            )
+
+            return (
+                "INR "
+                +
+                format_indian_number(
+                    numeric
+                )
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            return value
+
+    if indicator_type == "BANK_ACCOUNT_LAST4":
+
+        last_four = value[
+            -4:
+        ]
+
+        return (
+            "**** "
+            +
+            last_four
+        )
+
+    return value
+
+
+def group_indicators(
+    indicators: list,
+) -> list[dict[str, Any]]:
+
+    groups: dict[
+        str,
+        dict[str, Any],
+    ] = {}
+
+    order = []
+
+    for indicator in indicators:
+
+        indicator_type = (
+            safe_text(
+                indicator.get(
+                    "type"
+                ),
+                "UNKNOWN",
+            )
+            .strip()
+            .upper()
+        )
+
+        formatted_value = (
+            format_indicator_value(
+                indicator
+            )
+        )
+
+        if indicator_type not in groups:
+
+            groups[
+                indicator_type
+            ] = {
+                "type": indicator_type,
+                "label": humanize_indicator_type(
+                    indicator_type
+                ),
+                "values": [],
+            }
+
+            order.append(
+                indicator_type
+            )
+
+        values = groups[
+            indicator_type
+        ][
+            "values"
+        ]
+
+        if formatted_value not in values:
+
+            values.append(
+                formatted_value
+            )
+
+    return [
+        groups[
+            indicator_type
+        ]
+        for indicator_type
+        in order
+    ]
+
+
 def risk_color(
     level: Any,
 ):
@@ -2789,13 +3067,122 @@ def add_detailed_evidence(
 
                 story.append(
                     subsection_title(
-                        "Extracted Indicators",
+                        "Extracted Evidence",
                         styles,
                     )
                 )
 
 
-                rows = [
+                story.append(
+                    p(
+                        (
+                            "Machine-extracted indicators are grouped "
+                            "below into investigator-friendly evidence "
+                            "categories. The original raw values are "
+                            "retained immediately afterward for "
+                            "forensic traceability."
+                        ),
+                        styles[
+                            "small"
+                        ],
+                    )
+                )
+
+
+                friendly_rows = [
+                    [
+                        p(
+                            "Evidence Category",
+                            styles[
+                                "table_bold"
+                            ],
+                        ),
+                        p(
+                            "Extracted Values",
+                            styles[
+                                "table_bold"
+                            ],
+                        ),
+                        p(
+                            "Count",
+                            styles[
+                                "table_bold"
+                            ],
+                        ),
+                    ]
+                ]
+
+
+                for group in group_indicators(
+                    indicators
+                ):
+
+                    friendly_rows.append(
+                        [
+                            p(
+                                group.get(
+                                    "label"
+                                ),
+                                styles[
+                                    "table_bold"
+                                ],
+                            ),
+                            p(
+                                "\n".join(
+                                    group.get(
+                                        "values",
+                                        [],
+                                    )
+                                ),
+                                styles[
+                                    "table"
+                                ],
+                            ),
+                            p(
+                                len(
+                                    group.get(
+                                        "values",
+                                        [],
+                                    )
+                                ),
+                                styles[
+                                    "table"
+                                ],
+                            ),
+                        ]
+                    )
+
+
+                story.append(
+                    simple_table(
+                        friendly_rows,
+                        [
+                            48 * mm,
+                            112 * mm,
+                            15 * mm,
+                        ],
+                        header=True,
+                    )
+                )
+
+
+                story.append(
+                    Spacer(
+                        1,
+                        3 * mm,
+                    )
+                )
+
+
+                story.append(
+                    subsection_title(
+                        "Raw Forensic Indicators",
+                        styles,
+                    )
+                )
+
+
+                raw_rows = [
                     [
                         p(
                             "Type",
@@ -2804,7 +3191,7 @@ def add_detailed_evidence(
                             ],
                         ),
                         p(
-                            "Value",
+                            "Raw Value",
                             styles[
                                 "table_bold"
                             ],
@@ -2815,7 +3202,7 @@ def add_detailed_evidence(
 
                 for indicator in indicators:
 
-                    rows.append(
+                    raw_rows.append(
                         [
                             p(
                                 indicator.get(
@@ -2839,7 +3226,7 @@ def add_detailed_evidence(
 
                 story.append(
                     simple_table(
-                        rows,
+                        raw_rows,
                         [
                             38 * mm,
                             137 * mm,
