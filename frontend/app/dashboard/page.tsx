@@ -8,6 +8,8 @@ import {
 
 import {
   deleteCase,
+  getBlindSpots,
+  getCaseEvidence,
   getCases,
 } from "@/lib/api";
 
@@ -23,6 +25,16 @@ export default function HomePage() {
   ] = useState<ForensicCase[]>([]);
 
   const [
+    totalEvidence,
+    setTotalEvidence,
+  ] = useState(0);
+
+  const [
+    totalBlindSpots,
+    setTotalBlindSpots,
+  ] = useState(0);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -33,14 +45,106 @@ export default function HomePage() {
   ] = useState("");
 
 
-  async function loadCases() {
+  async function loadDashboard() {
     try {
       setError("");
 
-      const result =
+      const caseData =
         await getCases();
 
-      setCases(result);
+      setCases(
+        caseData
+      );
+
+      if (
+        caseData.length === 0
+      ) {
+        setTotalEvidence(0);
+        setTotalBlindSpots(0);
+        return;
+      }
+
+
+      const evidenceResults =
+        await Promise.allSettled(
+          caseData.map(
+            (forensicCase) =>
+              getCaseEvidence(
+                forensicCase.id
+              )
+          )
+        );
+
+
+      const blindSpotResults =
+        await Promise.allSettled(
+          caseData.map(
+            (forensicCase) =>
+              getBlindSpots(
+                forensicCase.id
+              )
+          )
+        );
+
+
+      const evidenceCount =
+        evidenceResults.reduce(
+          (
+            total,
+            result
+          ) => {
+
+            if (
+              result.status
+              !== "fulfilled"
+            ) {
+              return total;
+            }
+
+            return (
+              total
+              + result.value.length
+            );
+          },
+          0
+        );
+
+
+      const blindSpotCount =
+        blindSpotResults.reduce(
+          (
+            total,
+            result
+          ) => {
+
+            if (
+              result.status
+              !== "fulfilled"
+            ) {
+              return total;
+            }
+
+            return (
+              total
+              + (
+                result.value
+                  .blind_spots
+                  ?.length
+                ?? 0
+              )
+            );
+          },
+          0
+        );
+
+
+      setTotalEvidence(
+        evidenceCount
+      );
+
+      setTotalBlindSpots(
+        blindSpotCount
+      );
 
     } catch (error) {
 
@@ -58,7 +162,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    void loadCases();
+    void loadDashboard();
   }, []);
 
 
@@ -83,13 +187,9 @@ export default function HomePage() {
         caseId
       );
 
-      setCases(
-        (current) =>
-          current.filter(
-            (item) =>
-              item.id !== caseId
-          )
-      );
+      setLoading(true);
+
+      await loadDashboard();
 
     } catch (error) {
 
@@ -190,6 +290,10 @@ export default function HomePage() {
               {cases.length}
             </strong>
 
+            <small>
+              All investigations
+            </small>
+
           </article>
 
 
@@ -203,6 +307,10 @@ export default function HomePage() {
               {activeCases}
             </strong>
 
+            <small>
+              Open investigations
+            </small>
+
           </article>
 
 
@@ -213,11 +321,11 @@ export default function HomePage() {
             </span>
 
             <strong>
-              —
+              {totalEvidence}
             </strong>
 
             <small>
-              Phase 02
+              Across all cases
             </small>
 
           </article>
@@ -230,11 +338,11 @@ export default function HomePage() {
             </span>
 
             <strong>
-              —
+              {totalBlindSpots}
             </strong>
 
             <small>
-              Future engine
+              Potential blind spots
             </small>
 
           </article>
@@ -266,7 +374,7 @@ export default function HomePage() {
 
                 setLoading(true);
 
-                void loadCases();
+                void loadDashboard();
 
               }}
             >
