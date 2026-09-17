@@ -278,6 +278,264 @@ function shortLabel(
 }
 
 
+type TriageIndicator = {
+  type: string;
+  value: string;
+};
+
+
+type FriendlyIndicatorGroup = {
+  type: string;
+  label: string;
+  values: string[];
+};
+
+
+function humanizeIndicatorType(
+  type: string
+) {
+
+  const normalized =
+    type
+      .trim()
+      .toUpperCase();
+
+
+  const labels:
+    Record<
+      string,
+      string
+    > = {
+      AMOUNT_INR:
+        "Transaction Amounts",
+
+      BANK_ACCOUNT_LAST4:
+        "Bank Accounts Referenced",
+
+      INVOICE_ID:
+        "Invoices Found",
+
+      EMAIL:
+        "Email Addresses",
+
+      EMAIL_ADDRESS:
+        "Email Addresses",
+
+      IP:
+        "IP Addresses",
+
+      IP_ADDRESS:
+        "IP Addresses",
+
+      DOMAIN:
+        "Domains",
+
+      URL:
+        "URLs",
+
+      FILE:
+        "Files Referenced",
+
+      FILENAME:
+        "Files Referenced",
+
+      USER:
+        "Users Referenced",
+
+      USERNAME:
+        "Users Referenced",
+
+      PHONE:
+        "Phone Numbers",
+
+      PHONE_NUMBER:
+        "Phone Numbers",
+
+      DATE:
+        "Dates",
+
+      TIMESTAMP:
+        "Timestamps",
+
+      SHA256:
+        "SHA-256 Hashes",
+
+      SHA1:
+        "SHA-1 Hashes",
+
+      MD5:
+        "MD5 Hashes",
+    };
+
+
+  if (
+    labels[
+      normalized
+    ]
+  ) {
+
+    return labels[
+      normalized
+    ];
+  }
+
+
+  return normalized
+    .replace(
+      /_/g,
+      " "
+    )
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (character) =>
+        character.toUpperCase()
+    );
+}
+
+
+function formatIndicatorValue(
+  indicator:
+    TriageIndicator
+) {
+
+  const type =
+    indicator.type
+      .trim()
+      .toUpperCase();
+
+  const value =
+    indicator.value
+      .trim();
+
+
+  if (
+    type === "AMOUNT_INR"
+  ) {
+
+    const amount =
+      Number(
+        value.replace(
+          /,/g,
+          ""
+        )
+      );
+
+
+    if (
+      Number.isFinite(
+        amount
+      )
+    ) {
+
+      return (
+        "₹"
+        +
+        amount.toLocaleString(
+          "en-IN",
+          {
+            maximumFractionDigits:
+              2,
+          }
+        )
+      );
+    }
+  }
+
+
+  if (
+    type
+    === "BANK_ACCOUNT_LAST4"
+  ) {
+
+    const lastFour =
+      value.slice(
+        -4
+      );
+
+    return `•••• ${lastFour}`;
+  }
+
+
+  return value;
+}
+
+
+function groupIndicators(
+  indicators:
+    TriageIndicator[]
+) {
+
+  const groups =
+    new Map<
+      string,
+      FriendlyIndicatorGroup
+    >();
+
+
+  for (
+    const indicator
+    of indicators
+  ) {
+
+    const type =
+      indicator.type
+        .trim()
+        .toUpperCase();
+
+    const formattedValue =
+      formatIndicatorValue(
+        indicator
+      );
+
+
+    const existing =
+      groups.get(
+        type
+      );
+
+
+    if (
+      existing
+    ) {
+
+      if (
+        !existing.values.includes(
+          formattedValue
+        )
+      ) {
+
+        existing.values.push(
+          formattedValue
+        );
+      }
+
+      continue;
+    }
+
+
+    groups.set(
+      type,
+      {
+        type,
+        label:
+          humanizeIndicatorType(
+            type
+          ),
+        values: [
+          formattedValue,
+        ],
+      }
+    );
+  }
+
+
+  return Array.from(
+    groups.values()
+  );
+}
+
+
 /* ======================================================
    COLORS
 ====================================================== */
@@ -3600,6 +3858,185 @@ export default function CasePage() {
 
 
                               {
+                                selectedTriage.findings
+                                  .length > 0
+                                &&
+                                (
+
+                                  <div className="integrityCard">
+
+                                    <div
+                                      style={{
+                                        width:
+                                          "100%",
+                                      }}
+                                    >
+
+                                      <span className="eyebrow">
+                                        KEY FINDINGS
+                                      </span>
+
+
+                                      <p
+                                        style={{
+                                          marginTop:
+                                            "8px",
+
+                                          marginBottom:
+                                            "4px",
+
+                                          fontSize:
+                                            "12px",
+
+                                          lineHeight:
+                                            "1.6",
+
+                                          opacity:
+                                            0.68,
+                                        }}
+                                      >
+                                        Investigator-friendly
+                                        interpretation of the
+                                        artifact analysis.
+                                      </p>
+
+
+                                      <div
+                                        style={{
+                                          display:
+                                            "grid",
+
+                                          gap:
+                                            "10px",
+
+                                          marginTop:
+                                            "14px",
+                                        }}
+                                      >
+
+                                        {
+                                          selectedTriage
+                                            .findings
+                                            .map(
+                                              (
+                                                finding,
+                                                index
+                                              ) => (
+
+                                                <div
+                                                  key={
+                                                    `${finding.title}-${index}`
+                                                  }
+                                                  style={{
+                                                    padding:
+                                                      "12px 14px",
+
+                                                    borderRadius:
+                                                      "10px",
+
+                                                    border:
+                                                      `1px solid ${getFindingColor(
+                                                        finding.severity
+                                                      )}38`,
+
+                                                    background:
+                                                      "rgba(255,255,255,0.025)",
+                                                  }}
+                                                >
+
+                                                  <div
+                                                    style={{
+                                                      display:
+                                                        "flex",
+
+                                                      gap:
+                                                        "10px",
+
+                                                      alignItems:
+                                                        "center",
+
+                                                      flexWrap:
+                                                        "wrap",
+                                                    }}
+                                                  >
+
+                                                    <span
+                                                      style={{
+                                                        color:
+                                                          getFindingColor(
+                                                            finding.severity
+                                                          ),
+
+                                                        fontSize:
+                                                          "10px",
+
+                                                        fontWeight:
+                                                          800,
+
+                                                        letterSpacing:
+                                                          "0.12em",
+                                                      }}
+                                                    >
+                                                      {
+                                                        finding.severity
+                                                      }
+                                                    </span>
+
+
+                                                    <strong
+                                                      style={{
+                                                        fontSize:
+                                                          "13px",
+                                                      }}
+                                                    >
+                                                      {
+                                                        finding.title
+                                                      }
+                                                    </strong>
+
+                                                  </div>
+
+
+                                                  <p
+                                                    style={{
+                                                      marginTop:
+                                                        "7px",
+
+                                                      marginBottom:
+                                                        0,
+
+                                                      fontSize:
+                                                        "12px",
+
+                                                      lineHeight:
+                                                        "1.65",
+
+                                                      opacity:
+                                                        0.82,
+                                                    }}
+                                                  >
+                                                    {
+                                                      finding.detail
+                                                    }
+                                                  </p>
+
+                                                </div>
+
+                                              )
+                                            )
+                                        }
+
+                                      </div>
+
+                                    </div>
+
+                                  </div>
+
+                                )
+                              }
+
+
+                              {
                                 selectedTriage
                                   .indicators
                                   .length > 0
@@ -3616,112 +4053,319 @@ export default function CasePage() {
                                     >
 
                                       <span className="eyebrow">
-                                        EXTRACTED INDICATORS
+                                        EXTRACTED EVIDENCE
                                       </span>
 
 
-                                      {
-                                        selectedTriage
-                                          .indicators
-                                          .map(
-                                            (
-                                              indicator,
-                                              index
-                                            ) => (
+                                      <p
+                                        style={{
+                                          marginTop:
+                                            "8px",
 
-                                              <p
-                                                key={
-                                                  `${indicator.type}-${indicator.value}-${index}`
-                                                }
-                                                style={{
-                                                  marginTop:
-                                                    "8px",
+                                          marginBottom:
+                                            "4px",
 
-                                                  wordBreak:
-                                                    "break-word",
-                                                }}
-                                              >
-                                                <strong>
-                                                  {
-                                                    indicator.type
-                                                  }
-                                                </strong>
-                                                :
-                                                {" "}
-                                                {
-                                                  indicator.value
-                                                }
-                                              </p>
+                                          fontSize:
+                                            "12px",
 
-                                            )
+                                          lineHeight:
+                                            "1.6",
+
+                                          opacity:
+                                            0.68,
+                                        }}
+                                      >
+                                        Indicators grouped into
+                                        readable evidence categories.
+                                      </p>
+
+
+                                      <div
+                                        style={{
+                                          display:
+                                            "grid",
+
+                                          gap:
+                                            "12px",
+
+                                          marginTop:
+                                            "14px",
+                                        }}
+                                      >
+
+                                        {
+                                          groupIndicators(
+                                            selectedTriage
+                                              .indicators
                                           )
-                                      }
+                                            .map(
+                                              (
+                                                group
+                                              ) => (
+
+                                                <div
+                                                  key={
+                                                    group.type
+                                                  }
+                                                  style={{
+                                                    padding:
+                                                      "12px 14px",
+
+                                                    borderRadius:
+                                                      "10px",
+
+                                                    border:
+                                                      "1px solid rgba(157,212,255,0.14)",
+
+                                                    background:
+                                                      "rgba(255,255,255,0.02)",
+                                                  }}
+                                                >
+
+                                                  <div
+                                                    style={{
+                                                      display:
+                                                        "flex",
+
+                                                      alignItems:
+                                                        "center",
+
+                                                      justifyContent:
+                                                        "space-between",
+
+                                                      gap:
+                                                        "10px",
+
+                                                      flexWrap:
+                                                        "wrap",
+                                                    }}
+                                                  >
+
+                                                    <strong
+                                                      style={{
+                                                        fontSize:
+                                                          "12px",
+                                                      }}
+                                                    >
+                                                      {
+                                                        group.label
+                                                      }
+                                                    </strong>
+
+
+                                                    <span
+                                                      style={{
+                                                        fontSize:
+                                                          "10px",
+
+                                                        opacity:
+                                                          0.55,
+
+                                                        letterSpacing:
+                                                          "0.08em",
+                                                      }}
+                                                    >
+                                                      {
+                                                        group.values.length
+                                                      }
+                                                      {" "}
+                                                      {
+                                                        group.values.length
+                                                        === 1
+                                                          ? "ITEM"
+                                                          : "ITEMS"
+                                                      }
+                                                    </span>
+
+                                                  </div>
+
+
+                                                  <div
+                                                    style={{
+                                                      display:
+                                                        "flex",
+
+                                                      flexWrap:
+                                                        "wrap",
+
+                                                      gap:
+                                                        "7px",
+
+                                                      marginTop:
+                                                        "10px",
+                                                    }}
+                                                  >
+
+                                                    {
+                                                      group.values
+                                                        .map(
+                                                          (
+                                                            value,
+                                                            index
+                                                          ) => (
+
+                                                            <span
+                                                              key={
+                                                                `${group.type}-${value}-${index}`
+                                                              }
+                                                              style={{
+                                                                display:
+                                                                  "inline-flex",
+
+                                                                alignItems:
+                                                                  "center",
+
+                                                                maxWidth:
+                                                                  "100%",
+
+                                                                padding:
+                                                                  "6px 9px",
+
+                                                                borderRadius:
+                                                                  "8px",
+
+                                                                background:
+                                                                  "rgba(157,212,255,0.07)",
+
+                                                                border:
+                                                                  "1px solid rgba(157,212,255,0.10)",
+
+                                                                fontSize:
+                                                                  "11px",
+
+                                                                lineHeight:
+                                                                  "1.4",
+
+                                                                wordBreak:
+                                                                  "break-word",
+                                                              }}
+                                                            >
+                                                              {
+                                                                value
+                                                              }
+                                                            </span>
+
+                                                          )
+                                                        )
+                                                    }
+
+                                                  </div>
+
+                                                </div>
+
+                                              )
+                                            )
+                                        }
+
+                                      </div>
+
+
+                                      <details
+                                        style={{
+                                          marginTop:
+                                            "14px",
+
+                                          borderTop:
+                                            "1px solid rgba(255,255,255,0.07)",
+
+                                          paddingTop:
+                                            "12px",
+                                        }}
+                                      >
+
+                                        <summary
+                                          style={{
+                                            cursor:
+                                              "pointer",
+
+                                            fontSize:
+                                              "11px",
+
+                                            fontWeight:
+                                              700,
+
+                                            letterSpacing:
+                                              "0.08em",
+
+                                            opacity:
+                                              0.72,
+                                          }}
+                                        >
+                                          VIEW RAW INDICATORS
+                                        </summary>
+
+
+                                        <div
+                                          style={{
+                                            marginTop:
+                                              "10px",
+
+                                            display:
+                                              "grid",
+
+                                            gap:
+                                              "7px",
+                                          }}
+                                        >
+
+                                          {
+                                            selectedTriage
+                                              .indicators
+                                              .map(
+                                                (
+                                                  indicator,
+                                                  index
+                                                ) => (
+
+                                                  <div
+                                                    key={
+                                                      `${indicator.type}-${indicator.value}-${index}`
+                                                    }
+                                                    style={{
+                                                      fontSize:
+                                                        "11px",
+
+                                                      lineHeight:
+                                                        "1.5",
+
+                                                      wordBreak:
+                                                        "break-word",
+
+                                                      opacity:
+                                                        0.72,
+                                                    }}
+                                                  >
+
+                                                    <strong>
+                                                      {
+                                                        indicator.type
+                                                      }
+                                                    </strong>
+
+                                                    :
+                                                    {" "}
+
+                                                    <span>
+                                                      {
+                                                        indicator.value
+                                                      }
+                                                    </span>
+
+                                                  </div>
+
+                                                )
+                                              )
+                                          }
+
+                                        </div>
+
+                                      </details>
 
                                     </div>
 
                                   </div>
 
                                 )
-                              }
-
-
-                              {
-                                selectedTriage.findings
-                                  .map(
-                                    (
-                                      finding,
-                                      index
-                                    ) => (
-
-                                      <div
-                                        className="integrityCard"
-                                        key={
-                                          `${finding.title}-${index}`
-                                        }
-                                        style={{
-                                          borderColor:
-                                            `${getFindingColor(
-                                              finding.severity
-                                            )}55`,
-                                        }}
-                                      >
-
-                                        <div>
-
-                                          <span
-                                            className="eyebrow"
-                                            style={{
-                                              color:
-                                                getFindingColor(
-                                                  finding.severity
-                                                ),
-                                            }}
-                                          >
-                                            {
-                                              finding.severity
-                                            }
-                                          </span>
-
-
-                                          <strong>
-                                            {
-                                              finding.title
-                                            }
-                                          </strong>
-
-
-                                          <p>
-                                            {
-                                              finding.detail
-                                            }
-                                          </p>
-
-                                        </div>
-
-                                      </div>
-
-                                    )
-                                  )
                               }
 
 
