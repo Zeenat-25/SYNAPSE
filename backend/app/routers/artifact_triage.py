@@ -87,6 +87,7 @@ def record_to_public(
         "artifact_type": None,
         "confidence": None,
         "extractor": None,
+        "structured_evidence": {},
     }
 
 
@@ -98,11 +99,24 @@ def record_to_public(
             == "FORENSIC_PROFILE"
         ):
 
+            structured_evidence = finding.get(
+                "structured_evidence",
+                {},
+            )
+
             forensic_profile = {
                 "domain": finding.get("domain"),
                 "artifact_type": finding.get("artifact_type"),
                 "confidence": finding.get("confidence"),
                 "extractor": finding.get("extractor"),
+                "structured_evidence": (
+                    structured_evidence
+                    if isinstance(
+                        structured_evidence,
+                        dict,
+                    )
+                    else {}
+                ),
             }
 
             break
@@ -164,6 +178,11 @@ def record_to_public(
 
         "extractor":
             forensic_profile["extractor"],
+
+        "structured_evidence":
+            forensic_profile[
+                "structured_evidence"
+            ],
 
         "risk_score":
             record.risk_score,

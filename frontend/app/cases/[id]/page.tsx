@@ -64,6 +64,8 @@ import type {
   LedgerEntry,
   MLExplanation,
   MLPrediction,
+  StructuredEvidenceSection,
+  StructuredEvidenceValue,
 } from "@/lib/types";
 
 
@@ -532,6 +534,1271 @@ function groupIndicators(
 
   return Array.from(
     groups.values()
+  );
+}
+
+
+
+/* ======================================================
+   ARTIFACT-AWARE STRUCTURED EVIDENCE
+====================================================== */
+
+
+function formatStructuredEvidenceValue(
+  value:
+    StructuredEvidenceValue
+    | undefined,
+  label = ""
+): string {
+
+  if (
+    value === null
+    ||
+    value === undefined
+    ||
+    value === ""
+  ) {
+    return "—";
+  }
+
+
+  if (
+    Array.isArray(
+      value
+    )
+  ) {
+
+    if (
+      value.length === 0
+    ) {
+      return "—";
+    }
+
+
+    return value
+      .map(
+        (entry) =>
+          formatStructuredEvidenceValue(
+            entry,
+            label
+          )
+      )
+      .join(", ");
+  }
+
+
+  if (
+    typeof value === "number"
+  ) {
+
+    if (
+      label
+        .toUpperCase()
+        .includes("INR")
+    ) {
+
+      return (
+        "₹"
+        +
+        value.toLocaleString(
+          "en-IN",
+          {
+            maximumFractionDigits:
+              2,
+          }
+        )
+      );
+    }
+
+
+    return value.toLocaleString(
+      "en-IN"
+    );
+  }
+
+
+  if (
+    typeof value === "boolean"
+  ) {
+    return value
+      ? "Yes"
+      : "No";
+  }
+
+
+  if (
+    typeof value === "object"
+  ) {
+
+    try {
+
+      return JSON.stringify(
+        value
+      );
+
+    } catch {
+
+      return String(
+        value
+      );
+    }
+  }
+
+
+  const text =
+    String(
+      value
+    ).trim();
+
+
+  if (
+    /account/i.test(
+      label
+    )
+    &&
+    /^\d{4}$/.test(
+      text
+    )
+  ) {
+
+    return `•••• ${text}`;
+  }
+
+
+  return text || "—";
+}
+
+
+function structuredSectionUsesCards(
+  section:
+    Extract<
+      StructuredEvidenceSection,
+      {
+        kind: "records";
+      }
+    >
+) {
+
+  if (
+    section.columns.length
+    <= 6
+  ) {
+    return true;
+  }
+
+
+  return section.records.some(
+    (record) =>
+      section.columns.some(
+        (column) =>
+          formatStructuredEvidenceValue(
+            record[
+              column.key
+            ],
+            column.label
+          ).length
+          > 72
+      )
+  );
+}
+
+
+function StructuredEvidenceSectionView(
+  props: {
+    section:
+      StructuredEvidenceSection;
+  }
+) {
+
+  const section =
+    props.section;
+
+
+  if (
+    section.kind
+    === "key_value"
+  ) {
+
+    return (
+
+      <section
+        style={{
+          padding:
+            "14px",
+
+          borderRadius:
+            "12px",
+
+          border:
+            "1px solid rgba(157,212,255,0.12)",
+
+          background:
+            "rgba(255,255,255,0.018)",
+        }}
+      >
+
+        <div
+          style={{
+            display:
+              "flex",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              "10px",
+
+            alignItems:
+              "center",
+
+            flexWrap:
+              "wrap",
+          }}
+        >
+
+          <strong
+            style={{
+              fontSize:
+                "13px",
+            }}
+          >
+            {
+              section.label
+            }
+          </strong>
+
+
+          <span
+            style={{
+              fontSize:
+                "10px",
+
+              opacity:
+                0.55,
+
+              letterSpacing:
+                "0.08em",
+            }}
+          >
+            STRUCTURED SUMMARY
+          </span>
+
+        </div>
+
+
+        <div
+          style={{
+            display:
+              "grid",
+
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(150px, 1fr))",
+
+            gap:
+              "8px",
+
+            marginTop:
+              "12px",
+          }}
+        >
+
+          {
+            section.items.map(
+              (
+                item,
+                index
+              ) => (
+
+                <div
+                  key={
+                    `${section.key}-${item.label}-${index}`
+                  }
+                  style={{
+                    padding:
+                      "10px 11px",
+
+                    borderRadius:
+                      "9px",
+
+                    background:
+                      "rgba(157,212,255,0.045)",
+
+                    border:
+                      "1px solid rgba(157,212,255,0.08)",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+
+                      fontSize:
+                        "9px",
+
+                      letterSpacing:
+                        "0.08em",
+
+                      opacity:
+                        0.52,
+
+                      textTransform:
+                        "uppercase",
+                    }}
+                  >
+                    {
+                      item.label
+                    }
+                  </span>
+
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+
+                      marginTop:
+                        "5px",
+
+                      fontSize:
+                        "12px",
+
+                      lineHeight:
+                        "1.45",
+
+                      wordBreak:
+                        "break-word",
+                    }}
+                  >
+                    {
+                      formatStructuredEvidenceValue(
+                        item.value,
+                        item.label
+                      )
+                    }
+                  </strong>
+
+                </div>
+
+              )
+            )
+          }
+
+        </div>
+
+      </section>
+    );
+  }
+
+
+  if (
+    section.kind
+    === "groups"
+  ) {
+
+    return (
+
+      <section
+        style={{
+          padding:
+            "14px",
+
+          borderRadius:
+            "12px",
+
+          border:
+            "1px solid rgba(157,212,255,0.12)",
+
+          background:
+            "rgba(255,255,255,0.018)",
+        }}
+      >
+
+        <strong
+          style={{
+            fontSize:
+              "13px",
+          }}
+        >
+          {
+            section.label
+          }
+        </strong>
+
+
+        <div
+          style={{
+            display:
+              "grid",
+
+            gap:
+              "10px",
+
+            marginTop:
+              "12px",
+
+            maxHeight:
+              "360px",
+
+            overflowY:
+              "auto",
+
+            paddingRight:
+              "3px",
+          }}
+        >
+
+          {
+            section.groups.map(
+              (
+                group,
+                groupIndex
+              ) => (
+
+                <div
+                  key={
+                    `${section.key}-${group.key}-${groupIndex}`
+                  }
+                >
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+
+                      justifyContent:
+                        "space-between",
+
+                      gap:
+                        "10px",
+
+                      alignItems:
+                        "center",
+
+                      flexWrap:
+                        "wrap",
+                    }}
+                  >
+
+                    <span
+                      style={{
+                        fontSize:
+                          "11px",
+
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {
+                        group.label
+                      }
+                    </span>
+
+
+                    <span
+                      style={{
+                        fontSize:
+                          "9px",
+
+                        opacity:
+                          0.48,
+                      }}
+                    >
+                      {
+                        group.values.length
+                      } {
+                        group.values.length
+                        === 1
+                          ? "ITEM"
+                          : "ITEMS"
+                      }
+                    </span>
+
+                  </div>
+
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+
+                      flexWrap:
+                        "wrap",
+
+                      gap:
+                        "6px",
+
+                      marginTop:
+                        "7px",
+                    }}
+                  >
+
+                    {
+                      group.values.map(
+                        (
+                          value,
+                          valueIndex
+                        ) => (
+
+                          <span
+                            key={
+                              `${group.key}-${valueIndex}-${formatStructuredEvidenceValue(
+                                value,
+                                group.label
+                              )}`
+                            }
+                            style={{
+                              padding:
+                                "6px 8px",
+
+                              borderRadius:
+                                "8px",
+
+                              background:
+                                "rgba(157,212,255,0.055)",
+
+                              border:
+                                "1px solid rgba(157,212,255,0.09)",
+
+                              fontSize:
+                                "10px",
+
+                              lineHeight:
+                                "1.4",
+
+                              wordBreak:
+                                "break-word",
+                            }}
+                          >
+                            {
+                              formatStructuredEvidenceValue(
+                                value,
+                                group.label
+                              )
+                            }
+                          </span>
+
+                        )
+                      )
+                    }
+
+                  </div>
+
+                </div>
+
+              )
+            )
+          }
+
+        </div>
+
+      </section>
+    );
+  }
+
+
+  const useCards =
+    structuredSectionUsesCards(
+      section
+    );
+
+
+  if (
+    useCards
+  ) {
+
+    return (
+
+      <section
+        style={{
+          padding:
+            "14px",
+
+          borderRadius:
+            "12px",
+
+          border:
+            "1px solid rgba(157,212,255,0.12)",
+
+          background:
+            "rgba(255,255,255,0.018)",
+        }}
+      >
+
+        <div
+          style={{
+            display:
+              "flex",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              "10px",
+
+            alignItems:
+              "center",
+
+            flexWrap:
+              "wrap",
+          }}
+        >
+
+          <strong
+            style={{
+              fontSize:
+                "13px",
+            }}
+          >
+            {
+              section.label
+            }
+          </strong>
+
+
+          <span
+            style={{
+              fontSize:
+                "9px",
+
+              opacity:
+                0.5,
+
+              letterSpacing:
+                "0.07em",
+            }}
+          >
+            {
+              section.records.length
+            } {
+              section.records.length
+              === 1
+                ? "RECORD"
+                : "RECORDS"
+            }
+          </span>
+
+        </div>
+
+
+        <div
+          style={{
+            display:
+              "grid",
+
+            gap:
+              "10px",
+
+            marginTop:
+              "12px",
+
+            maxHeight:
+              "520px",
+
+            overflowY:
+              "auto",
+
+            paddingRight:
+              "3px",
+          }}
+        >
+
+          {
+            section.records.map(
+              (
+                record,
+                recordIndex
+              ) => (
+
+                <article
+                  key={
+                    `${section.key}-record-${recordIndex}`
+                  }
+                  style={{
+                    padding:
+                      "12px",
+
+                    borderRadius:
+                      "10px",
+
+                    border:
+                      "1px solid rgba(255,255,255,0.07)",
+
+                    background:
+                      "rgba(255,255,255,0.02)",
+                  }}
+                >
+
+                  <div
+                    style={{
+                      display:
+                        "grid",
+
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(145px, 1fr))",
+
+                      gap:
+                        "10px",
+                    }}
+                  >
+
+                    {
+                      section.columns.map(
+                        (
+                          column
+                        ) => {
+
+                          const formatted =
+                            formatStructuredEvidenceValue(
+                              record[
+                                column.key
+                              ],
+                              column.label
+                            );
+
+
+                          if (
+                            formatted
+                            === "—"
+                          ) {
+                            return null;
+                          }
+
+
+                          const longValue =
+                            formatted.length
+                            > 80;
+
+
+                          return (
+
+                            <div
+                              key={
+                                `${section.key}-${recordIndex}-${column.key}`
+                              }
+                              style={{
+                                gridColumn:
+                                  longValue
+                                    ? "1 / -1"
+                                    : undefined,
+
+                                minWidth:
+                                  0,
+                              }}
+                            >
+
+                              <span
+                                style={{
+                                  display:
+                                    "block",
+
+                                  fontSize:
+                                    "9px",
+
+                                  opacity:
+                                    0.5,
+
+                                  letterSpacing:
+                                    "0.08em",
+
+                                  textTransform:
+                                    "uppercase",
+                                }}
+                              >
+                                {
+                                  column.label
+                                }
+                              </span>
+
+
+                              <div
+                                style={{
+                                  marginTop:
+                                    "4px",
+
+                                  fontSize:
+                                    "11px",
+
+                                  lineHeight:
+                                    longValue
+                                      ? "1.65"
+                                      : "1.45",
+
+                                  whiteSpace:
+                                    longValue
+                                      ? "pre-wrap"
+                                      : "normal",
+
+                                  wordBreak:
+                                    "break-word",
+                                }}
+                              >
+                                {
+                                  formatted
+                                }
+                              </div>
+
+                            </div>
+
+                          );
+                        }
+                      )
+                    }
+
+                  </div>
+
+                </article>
+
+              )
+            )
+          }
+
+        </div>
+
+      </section>
+    );
+  }
+
+
+  return (
+
+    <section
+      style={{
+        padding:
+          "14px",
+
+        borderRadius:
+          "12px",
+
+        border:
+          "1px solid rgba(157,212,255,0.12)",
+
+        background:
+          "rgba(255,255,255,0.018)",
+      }}
+    >
+
+      <div
+        style={{
+          display:
+            "flex",
+
+          justifyContent:
+            "space-between",
+
+          gap:
+            "10px",
+
+          alignItems:
+            "center",
+
+          flexWrap:
+            "wrap",
+        }}
+      >
+
+        <strong
+          style={{
+            fontSize:
+              "13px",
+          }}
+        >
+          {
+            section.label
+          }
+        </strong>
+
+
+        <span
+          style={{
+            fontSize:
+              "9px",
+
+            opacity:
+              0.5,
+
+            letterSpacing:
+              "0.07em",
+          }}
+        >
+          {
+            section.records.length
+          } {
+            section.records.length
+            === 1
+              ? "RECORD"
+              : "RECORDS"
+          }
+        </span>
+
+      </div>
+
+
+      <div
+        style={{
+          overflowX:
+            "auto",
+
+          overflowY:
+            "auto",
+
+          maxHeight:
+            "430px",
+
+          marginTop:
+            "12px",
+
+          borderRadius:
+            "9px",
+
+          border:
+            "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+
+        <table
+          style={{
+            width:
+              "100%",
+
+            borderCollapse:
+              "collapse",
+
+            minWidth:
+              `${Math.max(
+                620,
+                section.columns.length
+                * 120
+              )}px`,
+
+            fontSize:
+              "10px",
+          }}
+        >
+
+          <thead>
+
+            <tr>
+
+              {
+                section.columns.map(
+                  (column) => (
+
+                    <th
+                      key={
+                        `${section.key}-${column.key}-heading`
+                      }
+                      style={{
+                        position:
+                          "sticky",
+
+                        top:
+                          0,
+
+                        zIndex:
+                          1,
+
+                        padding:
+                          "9px 10px",
+
+                        textAlign:
+                          "left",
+
+                        background:
+                          "#111a24",
+
+                        borderBottom:
+                          "1px solid rgba(255,255,255,0.08)",
+
+                        fontSize:
+                          "9px",
+
+                        letterSpacing:
+                          "0.06em",
+
+                        opacity:
+                          0.72,
+                      }}
+                    >
+                      {
+                        column.label
+                      }
+                    </th>
+
+                  )
+                )
+              }
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            {
+              section.records.map(
+                (
+                  record,
+                  recordIndex
+                ) => (
+
+                  <tr
+                    key={
+                      `${section.key}-row-${recordIndex}`
+                    }
+                  >
+
+                    {
+                      section.columns.map(
+                        (column) => (
+
+                          <td
+                            key={
+                              `${section.key}-${recordIndex}-${column.key}`
+                            }
+                            style={{
+                              padding:
+                                "9px 10px",
+
+                              verticalAlign:
+                                "top",
+
+                              borderBottom:
+                                "1px solid rgba(255,255,255,0.045)",
+
+                              lineHeight:
+                                "1.45",
+
+                              wordBreak:
+                                "break-word",
+                            }}
+                          >
+                            {
+                              formatStructuredEvidenceValue(
+                                record[
+                                  column.key
+                                ],
+                                column.label
+                              )
+                            }
+                          </td>
+
+                        )
+                      )
+                    }
+
+                  </tr>
+
+                )
+              )
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+  );
+}
+
+
+function StructuredEvidencePanel(
+  props: {
+    triage:
+      ArtifactTriageResult;
+  }
+) {
+
+  const structured =
+    props.triage
+      .structured_evidence;
+
+
+  if (
+    !structured
+    ||
+    !structured.sections
+    ||
+    structured.sections.length
+    === 0
+  ) {
+    return null;
+  }
+
+
+  return (
+
+    <div className="integrityCard">
+
+      <div
+        style={{
+          width:
+            "100%",
+        }}
+      >
+
+        <span className="eyebrow">
+          ARTIFACT-AWARE EXTRACTION
+        </span>
+
+
+        <div
+          style={{
+            display:
+              "flex",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              "12px",
+
+            alignItems:
+              "flex-start",
+
+            flexWrap:
+              "wrap",
+
+            marginTop:
+              "8px",
+          }}
+        >
+
+          <div>
+
+            <strong
+              style={{
+                display:
+                  "block",
+
+                fontSize:
+                  "15px",
+              }}
+            >
+              {
+                structured.display_name
+              }
+            </strong>
+
+
+            <p
+              style={{
+                marginTop:
+                  "6px",
+
+                marginBottom:
+                  0,
+
+                fontSize:
+                  "11px",
+
+                lineHeight:
+                  "1.55",
+
+                opacity:
+                  0.66,
+
+                maxWidth:
+                  "650px",
+              }}
+            >
+              Structured according to the detected
+              evidence shape. Generic forensic indicators
+              remain available separately for supporting
+              context and traceability.
+            </p>
+
+          </div>
+
+
+          <div
+            style={{
+              display:
+                "flex",
+
+              flexWrap:
+                "wrap",
+
+              gap:
+                "6px",
+            }}
+          >
+
+            <span
+              className="artifactCode"
+            >
+              {
+                structured.domain
+                  .replace(
+                    /_/g,
+                    " "
+                  )
+                  .toUpperCase()
+              }
+            </span>
+
+
+            <span
+              className="artifactCode"
+            >
+              {
+                structured.artifact_type
+                  .replace(
+                    /_/g,
+                    " "
+                  )
+                  .toUpperCase()
+              }
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div
+          style={{
+            display:
+              "grid",
+
+            gap:
+              "12px",
+
+            marginTop:
+              "16px",
+          }}
+        >
+
+          {
+            structured.sections.map(
+              (section) => (
+
+                <div
+                  key={
+                    section.key
+                  }
+                >
+
+                  <StructuredEvidenceSectionView
+                    section={
+                      section
+                    }
+                  />
+
+                </div>
+
+              )
+            )
+          }
+
+        </div>
+
+      </div>
+
+    </div>
   );
 }
 
@@ -3769,6 +5036,18 @@ export default function CasePage() {
 
                             <span className="artifactCode">
                               {
+                                selectedTriage
+                                  ?.structured_evidence
+                                  ?.display_name
+                                ??
+                                selectedTriage
+                                  ?.artifact_type
+                                  ?.replace(
+                                    /_/g,
+                                    " "
+                                  )
+                                  .toUpperCase()
+                                ??
                                 analyzerName(
                                   selectedEvidence
                                     .file_extension
@@ -3855,6 +5134,13 @@ export default function CasePage() {
                                 </button>
 
                               </div>
+
+
+                              <StructuredEvidencePanel
+                                triage={
+                                  selectedTriage
+                                }
+                              />
 
 
                               {
@@ -4053,7 +5339,14 @@ export default function CasePage() {
                                     >
 
                                       <span className="eyebrow">
-                                        EXTRACTED EVIDENCE
+                                        {
+                                          selectedTriage
+                                            .structured_evidence
+                                            ?.sections
+                                            ?.length
+                                            ? "SUPPORTING INDICATORS"
+                                            : "EXTRACTED EVIDENCE"
+                                        }
                                       </span>
 
 
@@ -4075,8 +5368,25 @@ export default function CasePage() {
                                             0.68,
                                         }}
                                       >
-                                        Indicators grouped into
-                                        readable evidence categories.
+                                        {
+                                          selectedTriage
+                                            .structured_evidence
+                                            ?.sections
+                                            ?.length
+                                            ? (
+                                              <>
+                                                Generic IOCs and referenced
+                                                entities retained as supporting
+                                                forensic context.
+                                              </>
+                                            )
+                                            : (
+                                              <>
+                                                Indicators grouped into
+                                                readable evidence categories.
+                                              </>
+                                            )
+                                        }
                                       </p>
 
 

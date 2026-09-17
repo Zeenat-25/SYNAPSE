@@ -1531,9 +1531,11 @@ def merge_semantic_analysis(
     semantic_specialist = artifact_type in {
         "ledger",
         "email",
+        "chat_transcript",
         "audit_log",
         "invoice",
         "payment_confirmation",
+        "network_or_server_log",
     }
 
     if semantic_specialist or semantic_score > base_score:
@@ -1548,6 +1550,13 @@ def merge_semantic_analysis(
     output["confidence"] = semantic.get("confidence")
     output["extractor"] = semantic.get("extractor")
     output["text_extracted"] = semantic.get("text_extracted", False)
+
+    structured_evidence = semantic.get("structured_evidence")
+    output["structured_evidence"] = (
+        structured_evidence
+        if isinstance(structured_evidence, dict)
+        else {}
+    )
 
     limitations: list[str] = []
     for value in (base.get("limitations"), semantic.get("limitations")):

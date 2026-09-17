@@ -269,6 +269,28 @@ def classify_artifact(text: str, extension: str, filename: str = "") -> tuple[st
     ):
         return "financial", "payment_confirmation", 0.90
 
+    # Common chat/transcript exports. This is intentionally conservative:
+    # require at least three timestamped/speaker-style message lines.
+    chat_lines = re.findall(
+        r"(?m)^\s*(?:\[?20\d{2}-\d{2}-\d{2}[^\]\n]{0,24}\]?\s+)?"
+        r"[A-Za-z][A-Za-z0-9 ._@+-]{1,60}\s*:\s*\S.+$",
+        text,
+    )
+    if len(chat_lines) >= 3 and "subject:" not in lowered:
+        domain = "financial" if any(term in lowered for term in FINANCIAL_TERMS) else "communication"
+        return domain, "chat_transcript", 0.78
+
+    # Common web/server/security log shape: repeated IP + request/status lines.
+    log_event_lines = re.findall(
+        r"(?m)^\s*(?:20\d{2}-\d{2}-\d{2}[ T][0-9:]+\s+)?"
+        r"(?:\d{1,3}\.){3}\d{1,3}\s+.*(?:GET|POST|PUT|DELETE|PATCH|"
+        r"status=\d{3}|result=|action=).*$",
+        text,
+        re.IGNORECASE,
+    )
+    if len(log_event_lines) >= 3:
+        return "cyber", "network_or_server_log", 0.82
+
     if any(pattern.search(text) for pattern in CYBER_PATTERNS.values()):
         return "cyber", "script_or_log", 0.93
 
@@ -468,6 +490,728 @@ def extract_entities(text: str, artifact_type: str) -> dict[str, list[Any]]:
         "timestamps": timestamps,
         "approval_thresholds": [threshold] if threshold else [],
     }
+
+
+# =========================================================
+# ARTIFACT-AWARE STRUCTURED EXTRACTION
+# =========================================================
+#
+# Generic entity extraction remains useful across investigations, but it is
+# not enough to describe the shape of the evidence. This layer preserves the
+# structure of the artifact itself (email messages, ledger rows, audit events,
+# etc.) without tying SYNAPSE to any specific case, vendor, person, or story.
+
+
+def _clean_scalar(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _split_address_values(value: str) -> list[str]:
+    emails = [str(v) for v in _dedupe(EMAIL_PATTERN.findall(value))]
+    if emails:
+        return emails
+    parts = [
+        part.strip()
+        for part in re.split(r"[;,]", value)
+        if part.strip()
+    ]
+    return [str(v) for v in _dedupe(parts)]
+
+
+def _normalise_subject(value: str) -> str:
+    subject = _clean_scalar(value)
+    while True:
+        stripped = re.sub(r"^(?:re|fw|fwd)\s*:\s*", "", subject, flags=re.IGNORECASE)
+        if stripped == subject:
+            break
+        subject = stripped
+    return subject
+
+
+def extract_email_messages(text: str) -> list[dict[str, Any]]:
+    """
+    Parse exported email content without assuming a specific sender, vendor,
+    subject, or case. Supports both single-message text emails and simple
+    exported threads that contain MESSAGE/EMAIL separators.
+    """
+    separator = re.compile(
+        r"(?m)^\s*-{2,}\s*(?:MESSAGE|EMAIL)\s*(\d+)?\s*-{2,}\s*$",
+        re.IGNORECASE,
+    )
+    matches = list(separator.finditer(text))
+
+    blocks: list[tuple[int, str]] = []
+    if matches:
+        for index, match in enumerate(matches):
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            number = int(match.group(1)) if match.group(1) else index + 1
+            blocks.append((number, text[start:end].strip()))
+    else:
+        blocks.append((1, text.strip()))
+
+    messages: list[dict[str, Any]] = []
+    header_pattern = re.compile(
+        r"(?mi)^(From|To|Cc|Bcc|Date|Sent|Subject)\s*:\s*(.+?)\s*$"
+    )
+
+    for sequence, block in blocks:
+        headers: dict[str, str] = {}
+        header_matches = list(header_pattern.finditer(block))
+        for match in header_matches:
+            key = match.group(1).casefold()
+            if key == "sent":
+                key = "date"
+            headers.setdefault(key, _clean_scalar(match.group(2)))
+
+        if not any(headers.get(key) for key in ("from", "to", "subject", "date")):
+            continue
+
+        body_start = max((match.end() for match in header_matches), default=0)
+        body = block[body_start:].strip()
+        body = re.sub(r"(?m)^\s*-{2,}\s*$", "", body).strip()
+
+        messages.append(
+            {
+                "message_number": sequence,
+                "from": headers.get("from", ""),
+                "to": _split_address_values(headers.get("to", "")),
+                "cc": _split_address_values(headers.get("cc", "")),
+                "bcc": _split_address_values(headers.get("bcc", "")),
+                "date": headers.get("date", ""),
+                "subject": headers.get("subject", ""),
+                "body_excerpt": body[:2000],
+            }
+        )
+
+    return messages[:100]
+
+
+def extract_chat_messages(text: str) -> list[dict[str, Any]]:
+    """
+    Parse common plain-text chat/transcript lines. Unknown formats simply
+    return no records and fall back to generic entity extraction.
+    """
+    patterns = [
+        re.compile(
+            r"^\s*\[(?P<timestamp>[^\]]+)\]\s*"
+            r"(?P<speaker>[A-Za-z][A-Za-z0-9 ._@+-]{1,60})\s*:\s*"
+            r"(?P<message>.+?)\s*$"
+        ),
+        re.compile(
+            r"^\s*(?P<timestamp>20\d{2}-\d{2}-\d{2}"
+            r"(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)\s+"
+            r"(?P<speaker>[A-Za-z][A-Za-z0-9 ._@+-]{1,60})\s*:\s*"
+            r"(?P<message>.+?)\s*$"
+        ),
+        re.compile(
+            r"^\s*(?P<speaker>[A-Za-z][A-Za-z0-9 ._@+-]{1,60})\s*:\s*"
+            r"(?P<message>.+?)\s*$"
+        ),
+    ]
+
+    records: list[dict[str, Any]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        for pattern in patterns:
+            match = pattern.match(line)
+            if not match:
+                continue
+            groups = match.groupdict()
+            records.append(
+                {
+                    "message_number": len(records) + 1,
+                    "timestamp": _clean_scalar(groups.get("timestamp", "")),
+                    "speaker": _clean_scalar(groups.get("speaker", "")),
+                    "message": _clean_scalar(groups.get("message", ""))[:2000],
+                }
+            )
+            break
+
+    return records[:300]
+
+
+def _parse_key_value_tokens(line: str) -> dict[str, str]:
+    """
+    Parse key=value log tokens while preserving quoted values containing
+    spaces, e.g. old="Vendor A" new="Vendor B".
+    """
+    result: dict[str, str] = {}
+    token_pattern = re.compile(
+        r"\b([A-Za-z][A-Za-z0-9_.:-]*)="
+        r"(\"[^\"]*\"|'[^']*'|[^\s]+)"
+    )
+    for match in token_pattern.finditer(line):
+        key = match.group(1).strip().casefold()
+        value = match.group(2).strip().strip("\"'")
+        result[key] = value
+    return result
+
+
+def extract_audit_events(text: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    timestamp_pattern = re.compile(
+        r"^\s*(20\d{2}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})\s+"
+    )
+
+    for raw_line in text.splitlines():
+        timestamp_match = timestamp_pattern.match(raw_line)
+        if not timestamp_match:
+            continue
+
+        tokens = _parse_key_value_tokens(raw_line[timestamp_match.end():])
+        if not tokens:
+            continue
+
+        events.append(
+            {
+                "timestamp": timestamp_match.group(1),
+                "user": tokens.get("user", ""),
+                "source": tokens.get("src", tokens.get("source", "")),
+                "action": tokens.get("action", ""),
+                "object": tokens.get("object", ""),
+                "field": tokens.get("field", ""),
+                "old_value": tokens.get("old", ""),
+                "new_value": tokens.get("new", ""),
+                "value": tokens.get("value", ""),
+                "amount": tokens.get("amount", ""),
+                "result": tokens.get("result", ""),
+                "mfa": tokens.get("mfa", ""),
+                "device": tokens.get("device", ""),
+                "file": tokens.get("file", ""),
+            }
+        )
+
+    return events[:500]
+
+
+def extract_network_log_events(text: str) -> list[dict[str, Any]]:
+    """
+    Conservative parser for common access/server log lines. Only directly
+    observable fields are returned.
+    """
+    events: list[dict[str, Any]] = []
+    common_log = re.compile(
+        r'^\s*(?P<ip>(?:\d{1,3}\.){3}\d{1,3})\s+'
+        r'.*?"(?P<method>GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+'
+        r'(?P<path>\S+)(?:\s+HTTP/[0-9.]+)?"\s+'
+        r'(?P<status>\d{3})\b',
+        re.IGNORECASE,
+    )
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        match = common_log.match(line)
+        if match and _valid_ipv4(match.group("ip")):
+            events.append(
+                {
+                    "source_ip": match.group("ip"),
+                    "method": match.group("method").upper(),
+                    "path": match.group("path"),
+                    "status": match.group("status"),
+                    "raw_excerpt": line[:500],
+                }
+            )
+            continue
+
+        tokens = _parse_key_value_tokens(line)
+        source_ip = tokens.get("src", tokens.get("source", tokens.get("ip", "")))
+        if source_ip and _valid_ipv4(source_ip) and (
+            tokens.get("status") or tokens.get("action") or tokens.get("result")
+        ):
+            events.append(
+                {
+                    "source_ip": source_ip,
+                    "method": tokens.get("method", ""),
+                    "path": tokens.get("path", tokens.get("url", "")),
+                    "status": tokens.get("status", tokens.get("result", "")),
+                    "action": tokens.get("action", ""),
+                    "user": tokens.get("user", ""),
+                    "raw_excerpt": line[:500],
+                }
+            )
+
+    return events[:500]
+
+
+def _entity_groups(
+    entities: dict[str, list[Any]],
+    *,
+    include_empty: bool = False,
+) -> list[dict[str, Any]]:
+    labels = [
+        ("emails", "Email Addresses"),
+        ("users", "Users / Identities"),
+        ("urls", "URLs"),
+        ("ips", "IP Addresses"),
+        ("timestamps", "Timestamps"),
+        ("vendors", "Vendors"),
+        ("beneficiaries", "Beneficiaries"),
+        ("organizations", "Organizations"),
+        ("invoice_ids", "Invoice IDs"),
+        ("payment_ids", "Payment / Transaction IDs"),
+        ("po_ids", "Purchase Order IDs"),
+        ("amounts", "Amounts (INR)"),
+        ("accounts", "Bank Account Endings"),
+        ("actions", "Actions"),
+        ("approval_thresholds", "Approval Thresholds (INR)"),
+    ]
+
+    groups: list[dict[str, Any]] = []
+    for key, label in labels:
+        values = entities.get(key, [])
+        if values or include_empty:
+            groups.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "values": list(values)[:100],
+                }
+            )
+    return groups
+
+
+def _records_section(
+    key: str,
+    label: str,
+    columns: list[tuple[str, str]],
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "kind": "records",
+        "columns": [
+            {"key": column_key, "label": column_label}
+            for column_key, column_label in columns
+        ],
+        "records": records,
+    }
+
+
+def _groups_section(
+    key: str,
+    label: str,
+    groups: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "kind": "groups",
+        "groups": groups,
+    }
+
+
+def _key_value_section(
+    key: str,
+    label: str,
+    items: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "kind": "key_value",
+        "items": [
+            {"label": item_label, "value": value}
+            for item_label, value in items
+            if value not in (None, "", [], {})
+        ],
+    }
+
+
+def build_structured_evidence(
+    text: str,
+    artifact_type: str,
+    domain: str,
+    entities: dict[str, list[Any]],
+) -> dict[str, Any]:
+    """
+    Return a stable renderer-friendly structure.
+
+    UI/PDF consumers only need to understand three generic section kinds:
+    key_value, records, and groups. New artifact parsers can be added later
+    without redesigning the frontend or PDF template.
+    """
+    display_names = {
+        "email": "Email Communication",
+        "chat_transcript": "Chat / Message Transcript",
+        "ledger": "Financial Ledger",
+        "audit_log": "Audit Log",
+        "invoice": "Invoice / Billing Document",
+        "payment_confirmation": "Payment Confirmation",
+        "network_or_server_log": "Network / Server Log",
+        "script_or_log": "Cyber Artifact",
+        "text_artifact": "Text Artifact",
+        "financial_document": "Financial Document",
+        "pdf_document": "PDF Document",
+        "image_document": "Image Document",
+    }
+
+    sections: list[dict[str, Any]] = []
+
+    if artifact_type == "email":
+        messages = extract_email_messages(text)
+        participants: list[str] = []
+        subjects: list[str] = []
+
+        for message in messages:
+            participants.extend(_split_address_values(str(message.get("from", ""))))
+            participants.extend([str(v) for v in message.get("to", [])])
+            participants.extend([str(v) for v in message.get("cc", [])])
+            participants.extend([str(v) for v in message.get("bcc", [])])
+            subject = _normalise_subject(str(message.get("subject", "")))
+            if subject:
+                subjects.append(subject)
+
+        sections.append(
+            _key_value_section(
+                "email_overview",
+                "Email Thread Overview" if len(messages) > 1 else "Email Overview",
+                [
+                    ("Messages", len(messages)),
+                    ("Participants", len(_dedupe(participants))),
+                    ("Thread Subject", _dedupe(subjects)[0] if subjects else ""),
+                ],
+            )
+        )
+        if messages:
+            sections.append(
+                _records_section(
+                    "email_messages",
+                    "Email Messages",
+                    [
+                        ("message_number", "Message"),
+                        ("from", "From"),
+                        ("to", "To"),
+                        ("date", "Date"),
+                        ("subject", "Subject"),
+                        ("body_excerpt", "Body"),
+                    ],
+                    messages,
+                )
+            )
+        sections.append(
+            _groups_section(
+                "referenced_entities",
+                "Referenced Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "chat_transcript":
+        messages = extract_chat_messages(text)
+        participants = [record.get("speaker", "") for record in messages]
+        sections.append(
+            _key_value_section(
+                "chat_overview",
+                "Conversation Overview",
+                [
+                    ("Messages", len(messages)),
+                    ("Participants", len(_dedupe(participants))),
+                ],
+            )
+        )
+        if messages:
+            sections.append(
+                _records_section(
+                    "chat_messages",
+                    "Messages",
+                    [
+                        ("message_number", "Message"),
+                        ("timestamp", "Timestamp"),
+                        ("speaker", "Speaker"),
+                        ("message", "Content"),
+                    ],
+                    messages,
+                )
+            )
+        sections.append(
+            _groups_section(
+                "referenced_entities",
+                "Referenced Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "ledger":
+        transactions = extract_ledger_transactions(text)
+        threshold = extract_threshold(text)
+        sections.append(
+            _key_value_section(
+                "ledger_overview",
+                "Ledger Overview",
+                [
+                    ("Transactions", len(transactions)),
+                    ("Approval Threshold (INR)", threshold),
+                    ("Vendors", len(_dedupe([tx.get("vendor", "") for tx in transactions]))),
+                ],
+            )
+        )
+        if transactions:
+            sections.append(
+                _records_section(
+                    "ledger_transactions",
+                    "Transactions",
+                    [
+                        ("date", "Date"),
+                        ("payment_id", "Payment"),
+                        ("vendor", "Vendor"),
+                        ("invoice_id", "Invoice"),
+                        ("amount", "Amount (INR)"),
+                        ("account", "Account"),
+                        ("approver", "Approver"),
+                        ("status", "Status"),
+                    ],
+                    transactions[:300],
+                )
+            )
+        sections.append(
+            _groups_section(
+                "referenced_entities",
+                "Referenced Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "audit_log":
+        events = extract_audit_events(text)
+        sections.append(
+            _key_value_section(
+                "audit_overview",
+                "Audit Log Overview",
+                [
+                    ("Events", len(events)),
+                    ("Users", len(_dedupe([event.get("user", "") for event in events]))),
+                    ("Actions", len(_dedupe([event.get("action", "") for event in events]))),
+                    ("Source IPs", len(_dedupe([event.get("source", "") for event in events]))),
+                ],
+            )
+        )
+        if events:
+            sections.append(
+                _records_section(
+                    "audit_events",
+                    "Audit Events",
+                    [
+                        ("timestamp", "Timestamp"),
+                        ("user", "User"),
+                        ("source", "Source"),
+                        ("action", "Action"),
+                        ("object", "Object"),
+                        ("field", "Field"),
+                        ("old_value", "Old"),
+                        ("new_value", "New"),
+                        ("result", "Result"),
+                    ],
+                    events,
+                )
+            )
+        sections.append(
+            _groups_section(
+                "referenced_entities",
+                "Referenced Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "invoice":
+        sections.append(
+            _key_value_section(
+                "invoice_overview",
+                "Invoice Details",
+                [
+                    ("Vendor", (entities.get("vendors") or [""])[0]),
+                    ("Invoice ID", (entities.get("invoice_ids") or [""])[0]),
+                    ("Purchase Order", (entities.get("po_ids") or [""])[0]),
+                    ("Beneficiary", (entities.get("beneficiaries") or [""])[0]),
+                    ("Payment Account", (entities.get("accounts") or [""])[0]),
+                    ("Amount (INR)", (entities.get("amounts") or [""])[-1]),
+                ],
+            )
+        )
+        sections.append(
+            _groups_section(
+                "invoice_entities",
+                "Invoice Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "payment_confirmation":
+        sections.append(
+            _key_value_section(
+                "payment_overview",
+                "Payment Details",
+                [
+                    ("Payment / Transaction ID", (entities.get("payment_ids") or [""])[0]),
+                    ("Amount (INR)", (entities.get("amounts") or [""])[-1]),
+                    ("Beneficiary", (entities.get("beneficiaries") or [""])[0]),
+                    ("Destination Account", (entities.get("accounts") or [""])[0]),
+                    ("Timestamp", (entities.get("timestamps") or [""])[0]),
+                ],
+            )
+        )
+        sections.append(
+            _groups_section(
+                "payment_entities",
+                "Payment Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    elif artifact_type == "network_or_server_log":
+        events = extract_network_log_events(text)
+        sections.append(
+            _key_value_section(
+                "network_log_overview",
+                "Network / Server Log Overview",
+                [
+                    ("Events", len(events)),
+                    ("Source IPs", len(_dedupe([event.get("source_ip", "") for event in events]))),
+                ],
+            )
+        )
+        if events:
+            sections.append(
+                _records_section(
+                    "network_events",
+                    "Network / Server Events",
+                    [
+                        ("source_ip", "Source IP"),
+                        ("method", "Method"),
+                        ("path", "Path / URL"),
+                        ("status", "Status"),
+                        ("action", "Action"),
+                        ("user", "User"),
+                    ],
+                    events,
+                )
+            )
+        sections.append(
+            _groups_section(
+                "referenced_entities",
+                "Referenced Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    else:
+        # Safe fallback: unknown evidence is never forced into a known schema.
+        sections.append(
+            _groups_section(
+                "extracted_entities",
+                "Extracted Entities",
+                _entity_groups(entities),
+            )
+        )
+
+    return {
+        "schema_version": 1,
+        "artifact_type": artifact_type,
+        "domain": domain,
+        "display_name": display_names.get(
+            artifact_type,
+            artifact_type.replace("_", " ").title() or "Evidence Artifact",
+        ),
+        "sections": [
+            section
+            for section in sections
+            if (
+                section.get("items")
+                or section.get("records")
+                or section.get("groups")
+            )
+        ],
+    }
+
+
+def structured_evidence_to_indicators(
+    structured: dict[str, Any],
+) -> list[dict[str, str]]:
+    """
+    Add concise artifact-specific indicators for the current UI/PDF. The full
+    structured payload is preserved separately in the forensic-profile finding.
+    """
+    artifact_type = str(structured.get("artifact_type", ""))
+    sections = structured.get("sections", [])
+    indicators: list[dict[str, str]] = []
+
+    section_map = {
+        str(section.get("key", "")): section
+        for section in sections
+        if isinstance(section, dict)
+    }
+
+    if artifact_type == "email":
+        messages = section_map.get("email_messages", {}).get("records", [])
+        indicators.append(
+            {"type": "EMAIL_MESSAGE_COUNT", "value": str(len(messages))}
+        )
+        participants: list[str] = []
+        for message in messages[:100]:
+            sender = _clean_scalar(message.get("from", ""))
+            if sender:
+                indicators.append({"type": "EMAIL_FROM", "value": sender})
+                participants.extend(_split_address_values(sender))
+            for recipient in message.get("to", [])[:20]:
+                value = _clean_scalar(recipient)
+                if value:
+                    indicators.append({"type": "EMAIL_TO", "value": value})
+                    participants.append(value)
+            date = _clean_scalar(message.get("date", ""))
+            if date:
+                indicators.append({"type": "EMAIL_MESSAGE_DATE", "value": date})
+            subject = _clean_scalar(message.get("subject", ""))
+            if subject:
+                indicators.append({"type": "EMAIL_SUBJECT", "value": subject})
+        for participant in _dedupe(participants)[:60]:
+            indicators.append({"type": "EMAIL_PARTICIPANT", "value": str(participant)})
+
+    elif artifact_type == "chat_transcript":
+        records = section_map.get("chat_messages", {}).get("records", [])
+        indicators.append({"type": "CHAT_MESSAGE_COUNT", "value": str(len(records))})
+        for speaker in _dedupe([record.get("speaker", "") for record in records])[:60]:
+            if speaker:
+                indicators.append({"type": "CHAT_PARTICIPANT", "value": str(speaker)})
+
+    elif artifact_type == "ledger":
+        records = section_map.get("ledger_transactions", {}).get("records", [])
+        indicators.append({"type": "TRANSACTION_COUNT", "value": str(len(records))})
+        for approver in _dedupe([record.get("approver", "") for record in records])[:60]:
+            if approver:
+                indicators.append({"type": "APPROVER", "value": str(approver)})
+
+    elif artifact_type == "audit_log":
+        records = section_map.get("audit_events", {}).get("records", [])
+        indicators.append({"type": "AUDIT_EVENT_COUNT", "value": str(len(records))})
+        for event in records[:200]:
+            if event.get("user"):
+                indicators.append({"type": "AUDIT_USER", "value": str(event["user"])})
+            if event.get("source"):
+                indicators.append({"type": "SOURCE_IP", "value": str(event["source"])})
+            if event.get("action"):
+                indicators.append({"type": "AUDIT_ACTION", "value": str(event["action"])})
+            if event.get("field"):
+                indicators.append({"type": "CHANGED_FIELD", "value": str(event["field"])})
+
+    elif artifact_type == "network_or_server_log":
+        records = section_map.get("network_events", {}).get("records", [])
+        indicators.append({"type": "LOG_EVENT_COUNT", "value": str(len(records))})
+        for event in records[:200]:
+            if event.get("source_ip"):
+                indicators.append({"type": "SOURCE_IP", "value": str(event["source_ip"])})
+            if event.get("path"):
+                indicators.append({"type": "REQUEST_PATH", "value": str(event["path"])})
+            if event.get("status"):
+                indicators.append({"type": "STATUS", "value": str(event["status"])})
+
+    return indicators
+
 
 
 def entities_to_indicators(entities: dict[str, list[Any]]) -> list[dict[str, str]]:
@@ -1067,17 +1811,39 @@ def analyze_forensic_content(path: Path, extension: str) -> dict[str, Any]:
         "timestamps": [], "approval_thresholds": [],
     }
 
+    structured_evidence = build_structured_evidence(
+        text=text,
+        artifact_type=artifact_type,
+        domain=domain,
+        entities=entities,
+    )
+
+    # ArtifactTriage already persists findings_json. Embedding the structured
+    # extraction in the forensic profile therefore preserves it across reloads
+    # without requiring a database schema migration.
+    profile_finding = _profile_finding(
+        domain,
+        artifact_type,
+        confidence,
+        extractor,
+    )
+    profile_finding["structured_evidence"] = structured_evidence
+
     findings: list[dict[str, Any]] = [
-        _profile_finding(domain, artifact_type, confidence, extractor)
+        profile_finding
     ]
 
     if artifact_type == "ledger":
         score, domain_findings = _ledger_analysis(text, entities)
         analyzer = "FINANCIAL_LEDGER_FORENSICS"
         method = "Transaction-pattern, threshold and payment-cluster analysis"
-    elif artifact_type == "email":
+    elif artifact_type in {"email", "chat_transcript"}:
         score, domain_findings = _email_analysis(text, entities)
-        analyzer = "SEMANTIC_COMMUNICATION_FORENSICS"
+        analyzer = (
+            "SEMANTIC_COMMUNICATION_FORENSICS"
+            if artifact_type == "email"
+            else "COMMUNICATION_TRANSCRIPT_FORENSICS"
+        )
         method = "Communication intent, approval-path and verification analysis"
     elif artifact_type == "audit_log":
         score, domain_findings = _audit_analysis(text, entities)
@@ -1093,8 +1859,16 @@ def analyze_forensic_content(path: Path, extension: str) -> dict[str, Any]:
         method = "Payment-document entity and beneficiary analysis"
     elif domain == "cyber":
         score, domain_findings = _cyber_analysis(text)
-        analyzer = "TEXT_SEMANTIC_CYBER_FORENSICS"
-        method = "Semantic cyber-artifact and IOC analysis"
+        analyzer = (
+            "NETWORK_LOG_FORENSICS"
+            if artifact_type == "network_or_server_log"
+            else "TEXT_SEMANTIC_CYBER_FORENSICS"
+        )
+        method = (
+            "Network/server event and IOC analysis"
+            if artifact_type == "network_or_server_log"
+            else "Semantic cyber-artifact and IOC analysis"
+        )
     elif domain == "financial":
         score, domain_findings = _generic_financial_analysis(text, entities)
         analyzer = "FINANCIAL_DOCUMENT_FORENSICS"
@@ -1105,8 +1879,22 @@ def analyze_forensic_content(path: Path, extension: str) -> dict[str, Any]:
         method = "Evidence classification and entity extraction"
 
     findings.extend(domain_findings)
-    indicators = entities_to_indicators(entities)
-    indicators.extend(_cumulative_amount_indicators(text))
+
+    # Put artifact-specific facts first. Generic entities remain available
+    # afterward as secondary supporting evidence.
+    indicators = structured_evidence_to_indicators(
+        structured_evidence
+    )
+    indicators.extend(
+        entities_to_indicators(
+            entities
+        )
+    )
+    indicators.extend(
+        _cumulative_amount_indicators(
+            text
+        )
+    )
 
     # Remove duplicate indicators created by independent extractors.
     deduped_indicators: list[dict[str, str]] = []
@@ -1134,6 +1922,7 @@ def analyze_forensic_content(path: Path, extension: str) -> dict[str, Any]:
         "confidence": round(confidence, 3),
         "extractor": extractor,
         "text_extracted": bool(text.strip()),
+        "structured_evidence": structured_evidence,
         "findings": findings,
         "indicators": deduped_indicators,
         "limitations": " ".join(limitations).strip(),

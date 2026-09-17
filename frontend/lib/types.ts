@@ -95,6 +95,95 @@ export type TriageIndicator = {
   value: string;
 };
 
+
+/* ======================================================
+   ARTIFACT-AWARE STRUCTURED EVIDENCE
+====================================================== */
+
+export type StructuredEvidencePrimitive =
+  | string
+  | number
+  | boolean
+  | null;
+
+
+export type StructuredEvidenceValue =
+  | StructuredEvidencePrimitive
+  | StructuredEvidencePrimitive[]
+  | {
+      [key: string]:
+        StructuredEvidenceValue;
+    };
+
+
+export type StructuredEvidenceKeyValueItem = {
+  label: string;
+  value: StructuredEvidenceValue;
+};
+
+
+export type StructuredEvidenceColumn = {
+  key: string;
+  label: string;
+};
+
+
+export type StructuredEvidenceRecord = {
+  [key: string]:
+    StructuredEvidenceValue;
+};
+
+
+export type StructuredEvidenceGroup = {
+  key: string;
+  label: string;
+  values: StructuredEvidenceValue[];
+};
+
+
+export type StructuredEvidenceKeyValueSection = {
+  key: string;
+  label: string;
+  kind: "key_value";
+  items: StructuredEvidenceKeyValueItem[];
+};
+
+
+export type StructuredEvidenceRecordsSection = {
+  key: string;
+  label: string;
+  kind: "records";
+  columns: StructuredEvidenceColumn[];
+  records: StructuredEvidenceRecord[];
+};
+
+
+export type StructuredEvidenceGroupsSection = {
+  key: string;
+  label: string;
+  kind: "groups";
+  groups: StructuredEvidenceGroup[];
+};
+
+
+export type StructuredEvidenceSection =
+  | StructuredEvidenceKeyValueSection
+  | StructuredEvidenceRecordsSection
+  | StructuredEvidenceGroupsSection;
+
+
+export type StructuredEvidence = {
+  schema_version: number;
+
+  artifact_type: string;
+  domain: string;
+
+  display_name: string;
+
+  sections: StructuredEvidenceSection[];
+};
+
+
 export type ArtifactTriageResult = {
   id: number;
 
@@ -107,6 +196,14 @@ export type ArtifactTriageResult = {
 
   analyzer: string;
   analysis_method: string;
+
+  domain?: string | null;
+  artifact_type?: string | null;
+  confidence?: number | null;
+  extractor?: string | null;
+
+  structured_evidence?:
+    StructuredEvidence | null;
 
   risk_score: number;
   risk_level: string;
