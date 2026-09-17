@@ -8,6 +8,10 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from .forensic_intelligence import (
+    analyze_forensic_content,
+)
+
 from .ml_inference import (
     MLModelUnavailableError,
     PEFeatureExtractionError,
@@ -1490,6 +1494,70 @@ def analyze_pe(
     }
 
 
+
+def merge_semantic_analysis(
+    base: dict[str, Any],
+    semantic: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge legacy static/ML-safe analysis with domain-aware forensic facts."""
+    output = dict(base)
+
+    base_findings = list(base.get("findings", []))
+    semantic_findings = list(semantic.get("findings", []))
+    output["findings"] = semantic_findings + base_findings
+
+    seen: set[tuple[str, str]] = set()
+    indicators: list[dict[str, Any]] = []
+    for item in list(semantic.get("indicators", [])) + list(base.get("indicators", [])):
+        if not isinstance(item, dict):
+            continue
+        key = (
+            str(item.get("type", "")).strip().upper(),
+            str(item.get("value", "")).strip().casefold(),
+        )
+        if not key[0] or not key[1] or key in seen:
+            continue
+        seen.add(key)
+        indicators.append(item)
+    output["indicators"] = indicators
+
+    base_score = float(base.get("risk_score", 0.0) or 0.0)
+    semantic_score = float(semantic.get("risk_score", 0.0) or 0.0)
+    final_score = clamp_score(max(base_score, semantic_score))
+    output["risk_score"] = final_score
+    output["risk_level"] = risk_level_from_score(final_score)
+
+    artifact_type = str(semantic.get("artifact_type", ""))
+    semantic_specialist = artifact_type in {
+        "ledger",
+        "email",
+        "audit_log",
+        "invoice",
+        "payment_confirmation",
+    }
+
+    if semantic_specialist or semantic_score > base_score:
+        output["analyzer"] = semantic.get("analyzer", output.get("analyzer"))
+        output["analysis_method"] = semantic.get(
+            "analysis_method",
+            output.get("analysis_method"),
+        )
+
+    output["domain"] = semantic.get("domain")
+    output["artifact_type"] = semantic.get("artifact_type")
+    output["confidence"] = semantic.get("confidence")
+    output["extractor"] = semantic.get("extractor")
+    output["text_extracted"] = semantic.get("text_extracted", False)
+
+    limitations: list[str] = []
+    for value in (base.get("limitations"), semantic.get("limitations")):
+        text = str(value or "").strip()
+        if text and text not in limitations:
+            limitations.append(text)
+    output["limitations"] = " ".join(limitations)
+
+    return output
+
 def triage_artifact(
     path: Path,
     extension: str,
@@ -1528,22 +1596,52 @@ def triage_artifact(
 
     if extension in TEXT_EXTENSIONS:
 
-        return analyze_text(
+        base = analyze_text(
             path
+        )
+
+        semantic = analyze_forensic_content(
+            path=path,
+            extension=extension,
+        )
+
+        return merge_semantic_analysis(
+            base=base,
+            semantic=semantic,
         )
 
 
     if extension in PDF_EXTENSIONS:
 
-        return analyze_pdf(
+        base = analyze_pdf(
             path
+        )
+
+        semantic = analyze_forensic_content(
+            path=path,
+            extension=extension,
+        )
+
+        return merge_semantic_analysis(
+            base=base,
+            semantic=semantic,
         )
 
 
     if extension in IMAGE_EXTENSIONS:
 
-        return analyze_image(
+        base = analyze_image(
             path
+        )
+
+        semantic = analyze_forensic_content(
+            path=path,
+            extension=extension,
+        )
+
+        return merge_semantic_analysis(
+            base=base,
+            semantic=semantic,
         )
 
 
