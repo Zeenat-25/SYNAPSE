@@ -1,0 +1,18 @@
+COBALT THREAD - EVIDENCE CT-004
+Source: Firewall / Proxy / Endpoint Network Activity
+Timezone: IST
+Entity: Asterline Data Systems Pvt. Ltd. (FICTIONAL TEST ENTITY)
+
+2026-09-11 21:41:56 src=203.0.113.54 dst=10.42.7.19 protocol=TLS_VPN user=s.kapoor action=ALLOW
+2026-09-11 21:52:15 src=10.42.7.19 dst=10.42.18.8 protocol=HTTPS host=data-export.internal user=s.kapoor action=ALLOW object=EXP-260911-441
+2026-09-11 22:03:44 src=10.42.7.19 dst=198.51.100.64 protocol=HTTPS host=vault-sync.example user=s.kapoor action=ALLOW bytes_out=38477122 file=client_export_q3.zip
+2026-09-11 22:04:08 src=10.42.7.19 dst=198.51.100.64 protocol=HTTPS host=vault-sync.example user=s.kapoor action=ALLOW bytes_out=18422 file=EXC-7742_exception_note.pdf
+2026-09-11 22:15:58 src=10.42.7.19 dst=203.0.113.54 protocol=TLS_VPN user=s.kapoor action=DISCONNECT
+
+NETWORK CONTEXT
+203.0.113.54 = TEST-NET-3 reserved address.
+198.51.100.64 = TEST-NET-2 reserved address.
+vault-sync.example = reserved example domain, not a real service.
+Known office ranges = 10.42.0.0/16.
+
+FORENSIC DEMO ARTIFACT - NOT REAL NETWORK ACTIVITY.

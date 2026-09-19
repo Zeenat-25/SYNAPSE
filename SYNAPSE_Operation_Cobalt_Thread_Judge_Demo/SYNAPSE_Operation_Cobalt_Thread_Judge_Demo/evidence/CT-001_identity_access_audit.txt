@@ -1,0 +1,19 @@
+COBALT THREAD - EVIDENCE CT-001
+Source: Identity / Admin Access Audit
+Entity: Asterline Data Systems Pvt. Ltd. (FICTIONAL TEST ENTITY)
+Timezone: IST
+
+2026-09-11 21:42:18 user=s.kapoor src=203.0.113.54 action=LOGIN result=SUCCESS mfa=PASSWORD_ONLY device=UNKNOWN-WIN11
+2026-09-11 21:45:03 user=s.kapoor src=203.0.113.54 action=REQUEST_ROLE role=DATA_EXPORT_ADMIN ticket=EXC-7742 result=APPROVED
+2026-09-11 21:48:26 user=s.kapoor src=203.0.113.54 action=OPEN_DATASET object=CLIENT_MASTER_Q3 result=SUCCESS
+2026-09-11 21:52:09 user=s.kapoor src=203.0.113.54 action=CREATE_EXPORT object=client_export_q3.csv rows=48217 result=SUCCESS
+2026-09-11 21:55:44 user=s.kapoor src=203.0.113.54 action=CREATE_ARCHIVE object=client_export_q3.zip size_bytes=38477122 result=SUCCESS
+2026-09-11 22:01:12 user=s.kapoor src=203.0.113.54 action=READ_POLICY_EXCEPTION ticket=EXC-7742 result=SUCCESS
+2026-09-11 22:16:33 user=s.kapoor src=203.0.113.54 action=LOGOUT result=SUCCESS
+
+SECURITY CONTEXT
+203.0.113.54 = TEST-NET-3 reserved address used only for synthetic documentation/testing.
+Normal Asterline privileged access requires password + authenticator.
+EXC-7742 is a fictional exception ticket used only in this demo.
+
+FORENSIC DEMO ARTIFACT - NOT REAL CASE DATA

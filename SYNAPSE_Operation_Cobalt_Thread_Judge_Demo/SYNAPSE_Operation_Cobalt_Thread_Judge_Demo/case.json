@@ -1,0 +1,6 @@
+{
+  "name": "Operation Cobalt Thread - Judge Demo",
+  "case_type": "Insider Threat",
+  "investigator": "Zeenat Ansari (Demo Investigator)",
+  "description": "Fictional SYNAPSE demonstration case involving off-hours privileged access, an internal data export, a questionable policy exception, and outbound transfer activity. All people, organizations, systems, IP addresses, domains, tickets, and files are synthetic or reserved for documentation/testing."
+}

@@ -1,0 +1,46 @@
+COBALT THREAD - EVIDENCE CT-002
+Source: Exported internal email thread (.txt)
+Organization: Asterline Data Systems Pvt. Ltd. (FICTIONAL TEST ENTITY)
+
+----- MESSAGE 1 -----
+From: s.kapoor@asterline.example
+To: data.ops@asterline.example
+Date: 2026-09-11 17:16 IST
+Subject: Q3 client export for external review
+
+Hi,
+I need the CLIENT_MASTER_Q3 export tonight for an external review.
+Please keep the archive name as client_export_q3.zip.
+
+The temporary exception is EXC-7742. I will send the signed note shortly.
+
+- Sameer
+
+----- MESSAGE 2 -----
+From: data.ops@asterline.example
+To: s.kapoor@asterline.example
+Date: 2026-09-11 17:31 IST
+Subject: RE: Q3 client export for external review
+
+The ticket exists, but I cannot see a security approver or destination listed.
+Can you confirm where the archive is going?
+
+----- MESSAGE 3 -----
+From: s.kapoor@asterline.example
+To: data.ops@asterline.example
+Date: 2026-09-11 17:38 IST
+Subject: RE: Q3 client export for external review
+
+Use the temporary transfer endpoint from the exception note.
+The review is time-sensitive, so please do not hold the export for tomorrow's approval queue.
+
+----- MESSAGE 4 -----
+From: data.ops@asterline.example
+To: security.review@asterline.example
+Date: 2026-09-12 09:08 IST
+Subject: Review requested - EXC-7742
+
+Flagging EXC-7742 for review. The archive client_export_q3.zip was created last night,
+but the exception note in the case folder appears to have been generated after the role request.
+
+FORENSIC DEMO ARTIFACT - ALL IDENTITIES AND DOMAINS ARE FICTIONAL.

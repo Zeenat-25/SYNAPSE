@@ -1,0 +1,25 @@
+COBALT THREAD - EVIDENCE CT-003
+Source: Data Export Service Manifest
+Entity: Asterline Data Systems Pvt. Ltd. (FICTIONAL TEST ENTITY)
+Export Job: EXP-260911-441
+Requested By: s.kapoor
+Exception Ticket: EXC-7742
+Created: 2026-09-11 21:52:09 IST
+
+DATASET                 ROWS     OUTPUT FILE
+CLIENT_MASTER_Q3        48217    client_export_q3.csv
+CLIENT_CONTACT_Q3       48102    client_contact_q3.csv
+SERVICE_USAGE_Q3        47688    service_usage_q3.csv
+
+ARCHIVE
+Name: client_export_q3.zip
+Size: 38,477,122 bytes
+SHA256-REFERENCE: demo-reference-only-not-a-real-production-hash
+Destination Label: TEMP_REVIEW_ENDPOINT
+Retention: 24 HOURS
+
+CONTROL NOTE
+Exports containing CLIENT_MASTER_Q3 normally require a security approver.
+Exception EXC-7742 was attached to this job.
+
+FORENSIC DEMO ARTIFACT - NOT REAL CUSTOMER DATA.
