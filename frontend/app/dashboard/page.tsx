@@ -387,7 +387,7 @@ export default function HomePage() {
           {loading && (
 
             <div className="emptyState">
-              Loading forensic cases...
+              Forensic engine is waking up — free demo backend may take up to a minute on the first request.
             </div>
 
           )}
