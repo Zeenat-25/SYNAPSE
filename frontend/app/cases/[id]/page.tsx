@@ -4027,7 +4027,7 @@ export default function CasePage() {
     return (
 
       <main className="centerScreen">
-        Loading investigation...
+       Forensic engine is waking up — free demo backend may take up to a minute on the first request.
       </main>
     );
   }
